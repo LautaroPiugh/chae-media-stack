@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-STATE_FILE="/home/chae/.cache/media-stack-update.state"
+STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/media-stack-update.state"
 
 if [[ ! -f "$STATE_FILE" ]]; then
   printf 'upd:never'

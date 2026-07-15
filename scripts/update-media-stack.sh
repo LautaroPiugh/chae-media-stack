@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT="/home/chae"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$PROJECT_DIR"
 LOG_DIR="$ROOT/logs"
 LOG_FILE="$LOG_DIR/media-stack-update.log"
-STATE_FILE="$ROOT/.cache/media-stack-update.state"
+STATE_FILE="$HOME/.cache/media-stack-update.state"
 STACK_DASHBOARD_SCRIPT="$ROOT/scripts/generate-stack-dashboard-data.sh"
 DRY_RUN="${DRY_RUN:-0}"
 WHATSAPP_NOTIFY_URL="${WHATSAPP_NOTIFY_URL:-http://127.0.0.1:3555/notify/system-update}"

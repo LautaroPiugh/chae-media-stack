@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-CACHE_DIR="/home/chae/.cache/stack-dashboard"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/stack-dashboard"
 OUTPUT_FILE="$CACHE_DIR/stack-data.json"
 TMP_FILE="$CACHE_DIR/stack-data.json.tmp"
-STATE_FILE="/home/chae/.cache/media-stack-update.state"
+STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/media-stack-update.state"
 
 mkdir -p "$CACHE_DIR"
-chmod 711 "/home/chae" "/home/chae/.cache"
 chmod 755 "$CACHE_DIR"
 
 read_state_value() {
@@ -266,11 +265,11 @@ jq -n \
       ]
     },
     commands:[
-      {label:"Regenerar datos del dashboard",command:"/home/chae/scripts/generate-stack-dashboard-data.sh",description:"Actualiza el JSON cacheado que consume la portada."},
+      {label:"Regenerar datos del dashboard",command:"# Ruta: $(dirname "$0")/generate-stack-dashboard-data.sh",description:"Actualiza el JSON cacheado que consume la portada."},
       {label:"Ver Tdarr en vivo",command:"docker logs -f chae-tdarr-node",description:"Seguimiento del worker de transcode."},
       {label:"Ver contenedores",command:"docker ps --format \"table {{.Names}}\\t{{.Status}}\\t{{.Ports}}\"",description:"Vista rapida del stack."},
       {label:"Espacio de biblioteca",command:"df -h /mnt/media /mnt/media2/downloads",description:"Confirma espacio libre para media y cache de Tdarr."},
-      {label:"Actualizar stack completo",command:"/home/chae/scripts/update-media-stack.sh media",description:"Actualiza contenedores y refresca el cache del dashboard."}
+      {label:"Actualizar stack completo",command:"# Ruta: $(dirname "$0")/update-media-stack.sh media",description:"Actualiza contenedores y refresca el cache del dashboard."}
     ]
   }' > "$TMP_FILE"
 

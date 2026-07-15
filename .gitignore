@@ -20,6 +20,10 @@
 !index.html.new
 !RESUMEN_MEDIA_STACK_*.md
 !INSTALL.md
+!docker-compose.yml
+!scripts/health-check.sh
+!scripts/start-stack.sh
+!scripts/stop-stack.sh
 
 # Secrets
 **/.env

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKUP_DIR="/mnt/media2/backups/stack"
 DATE="$(date +%Y%m%d-%H%M%S)"
 RETENTION_DAYS=14
@@ -31,15 +32,15 @@ fi
 
 # ── Configs de servicios clave ──
 CONFIG_DIRS=(
-  "jellyfin:/home/chae/services/jellyfin"
-  "sonarr:/home/chae/services/sonarr"
-  "radarr:/home/chae/services/radarr"
-  "bazarr:/home/chae/services/bazarr"
-  "prowlarr:/home/chae/services/prowlarr"
-  "qbittorrent:/home/chae/services/qbittorrent"
-  "jellyseerr:/home/chae/services/jellyseerr"
-  "tdarr:/home/chae/services/tdarr"
-  "uptime-kuma:/home/chae/services/uptime-kuma"
+  "jellyfin:$PROJECT_DIR/services/jellyfin"
+  "sonarr:$PROJECT_DIR/services/sonarr"
+  "radarr:$PROJECT_DIR/services/radarr"
+  "bazarr:$PROJECT_DIR/services/bazarr"
+  "prowlarr:$PROJECT_DIR/services/prowlarr"
+  "qbittorrent:$PROJECT_DIR/services/qbittorrent"
+  "jellyseerr:$PROJECT_DIR/services/jellyseerr"
+  "tdarr:$PROJECT_DIR/services/tdarr"
+  "uptime-kuma:$PROJECT_DIR/services/uptime-kuma"
 )
 
 for pair in "${CONFIG_DIRS[@]}"; do

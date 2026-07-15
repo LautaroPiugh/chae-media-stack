@@ -131,6 +131,13 @@ cd chae-media-stack
 
 Cada servicio tiene un archivo `docker-compose.yml`. Algunos requieren editar variables antes de iniciarlos.
 
+> **Importante**: Antes de arrancar, buscá y reemplazá estos valores en los `docker-compose.yml` según tu entorno:
+>
+> - `192.168.1.100` → IP de tu servidor
+> - `PUID=1000` / `PGID=1000` → tu UID/GID (corre `id` en tu terminal)
+> - `TZ=America/Argentina/Buenos_Aires` → tu zona horaria
+> - `CHANGEME` → contraseñas/API keys propias
+
 ### Postgres
 
 Editar `services/postgres/docker-compose.yml` y cambiar la contraseña:
@@ -195,6 +202,16 @@ nano scripts/check_es_subs.env
 ---
 
 ## 6. Iniciar Servicios
+
+### Opción rápida: un solo comando
+
+```bash
+./scripts/start-stack.sh
+```
+
+Esto levanta todos los servicios en el orden correcto.
+
+### Opción manual: servicio por servicio
 
 Levantar los servicios **en este orden** para evitar errores de dependencia.
 

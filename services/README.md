@@ -192,12 +192,12 @@ docker logs chae-jellyfin
 docker logs chae-qbittorrent
 docker logs chae-sonarr
 
-# Reiniciar un servicio
-cd /home/chae/services/jellyfin && docker compose restart
+# Reiniciar un servicio (ajustá la ruta a tu proyecto)
+cd /ruta/al/proyecto/services/jellyfin && docker compose restart
 
 # Ver uso de recursos
 docker stats
 
-# Backup de configuraciones
-tar -czf backup-$(date +%Y%m%d).tar.gz /home/chae/services/*/config/
+# Backup de configuraciones (ajustá la ruta a tu proyecto)
+tar -czf backup-$(date +%Y%m%d).tar.gz /ruta/al/proyecto/services/*/config/
 ```

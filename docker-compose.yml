@@ -1,0 +1,20 @@
+# Red compartida para todo el stack
+# Creada automáticamente al iniciar cualquier servicio con `docker compose up`
+# Referenciada como `external: true` en cada sub-compose individual
+#
+# Para levantar todo usar:
+#   ./scripts/start-stack.sh
+#   ./scripts/stop-stack.sh
+#   ./scripts/health-check.sh
+
+networks:
+  qbittorrent_default:
+    external: true
+  media:
+    external: true
+    name: qbittorrent_default
+  prowlarr_default:
+    external: true
+  jellyfin:
+    external: true
+    name: jellyfin_default

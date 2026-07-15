@@ -282,6 +282,46 @@ Traduce subtítulos EN descargados recientemente a ES usando Gemini AI.
 - Python 3 (para los scripts de subtítulos)
 - Linux con filesystem `ext4` o `ntfs`
 
+## Antes de Usar
+
+Este stack está diseñado para ser adaptado a tu hardware y red. Revisá estos puntos:
+
+### 1. Container names (`chae-*`)
+
+Todos los servicios usan el prefijo `chae-` (ej: `chae-jellyfin`, `chae-radarr`).
+Si tenés otros stacks corriendo, cambiá `container_name` en cada `docker-compose.yml` y actualizá las referencias en `scripts/`.
+
+### 2. Usuario y permisos
+
+Los servicios corren con `PUID=1000`, `PGID=1000`. Si tu usuario tiene otro UID/GID, cambiá estos valores en todos los `docker-compose.yml` de `services/*/`.
+
+### 3. Zona horaria
+
+Todos los servicios usan `TZ=America/Argentina/Buenos_Aires`. Cambialo al que corresponda en cada `docker-compose.yml`.
+
+### 4. Rutas de almacenamiento
+
+Las rutas de montura (`/mnt/media`, `/mnt/media2`, `/downloads`) están hardcodeadas en los volúmenes de Docker.
+Ajustalas según tu estructura de discos en cada `docker-compose.yml` y en los scripts que referencian almacenamiento.
+
+### 5. IP del servidor
+
+Varios `docker-compose.yml` y scripts usan `192.168.1.100` como IP de ejemplo. Reemplazala por la IP de tu servidor.
+
+### 6. Scripts personales
+
+Algunos scripts como `fix-media-mounts.sh` tienen dispositivos específicos (`/dev/sdb4`, `/dev/sdd1`) y rutas de usuario. Son específicos de esta máquina; revisalos antes de ejecutarlos.
+
+### 7. Redes Docker
+
+Los servicios se conectan a redes llamadas `qbittorrent_default` y `jellyfin_default`.
+Ejectá el primer `docker compose up` en cada servicio para que las cree automáticamente, o crealas manualmente:
+
+```bash
+docker network create qbittorrent_default
+docker network create jellyfin_default
+```
+
 ## Inicio Rápido
 
 ```bash
@@ -292,13 +332,18 @@ cd chae-media-stack
 cp jellyfin-whatsapp-bot/.env.example jellyfin-whatsapp-bot/.env
 # Editar .env con tus API keys y URLs
 
-# Iniciar un servicio (ejemplo: Jellyfin)
-cd services/jellyfin
-docker compose up -d
+# Opción 1: Iniciar todos los servicios de una
+./scripts/start-stack.sh
 
-# Iniciar el bot de WhatsApp
-cd ../../jellyfin-whatsapp-bot
-docker compose up -d --build
+# Opción 2: Iniciar un servicio individual
+cd services/jellyfin && docker compose up -d && cd ../..
+cd jellyfin-whatsapp-bot && docker compose up -d --build && cd ..
+```
+
+## Health Check
+
+```bash
+./scripts/health-check.sh
 ```
 
 ## Lecturas Adicionales

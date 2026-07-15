@@ -239,6 +239,9 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 | 6 horas | `python3 /home/chae/scripts/check_es_subs.py` | Verifica y descarga subtítulos ES faltantes |
 | 3am daily | `/home/chae/scripts/backup-stack.sh` | Backup PostgreSQL + configs a `/mnt/media2/backups/stack/` (retención 14 días) |
 | 4am daily | Watchtower (Docker) | Actualiza automáticamente todos los containers |
+| on-demand | `./scripts/start-stack.sh` | Inicia todos los servicios en orden |
+| on-demand | `./scripts/stop-stack.sh` | Detiene todos los servicios (orden inverso) |
+| on-demand | `./scripts/health-check.sh` | Verifica estado de todos los containers + HTTP + almacenamiento |
 
 ---
 

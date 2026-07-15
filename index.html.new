@@ -136,7 +136,7 @@
     <section class="section-block">
       <h2>Bot de WhatsApp 📱</h2>
       <div class="terminal-block" style="margin-bottom: 20px;">
-        <div class="terminal-title">Comandos del Bot — Escribe en WhatsApp al +54 934 257 86643</div>
+        <div class="terminal-title">Comandos del Bot — Escaneá el QR con WhatsApp</div>
         <table class="bot-commands-table" style="width: 100%; text-align: left; font-size: 13px;">
           <thead>
             <tr style="border-bottom: 1px solid #444;">

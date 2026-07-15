@@ -1,8 +1,9 @@
 const { execSync } = require('child_process');
 const { formatPanel } = require('../utils/panel');
 const { formatErrorPanel } = require('../utils/formatMessage');
+const path = require('path');
 
-const SCRIPT_PATH = '/home/chae/scripts/check_es_subs.py';
+const SCRIPT_PATH = path.join(__dirname, '../../../scripts/check_es_subs.py');
 
 async function handleTraducir(text) {
   const lower = text.toLowerCase().trim();

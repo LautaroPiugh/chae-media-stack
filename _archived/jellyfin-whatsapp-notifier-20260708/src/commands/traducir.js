@@ -1,6 +1,7 @@
 const { execSync } = require('child_process');
+const path = require('path');
 
-const SCRIPT_PATH = '/home/chae/scripts/check_es_subs.py';
+const SCRIPT_PATH = path.join(__dirname, '../../../scripts/check_es_subs.py');
 
 async function traducirCommand(args) {
   if (args.length === 0) {
