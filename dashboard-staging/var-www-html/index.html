@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chae Server | Media Stack</title>
+  <link rel="stylesheet" href="assets/chae.css">
+  <link rel="icon" href="assets/chae-icon.jpg" type="image/jpeg">
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <strong id="hostName">Chae</strong>
+      <span class="muted">Media Stack</span>
+    </div>
+    <div class="topbar-actions">
+      <span id="generatedAt" class="topbar-pill">Cargando datos...</span>
+      <button id="refreshButton" class="ghost-button" type="button">Actualizar</button>
+    </div>
+  </div>
+
+  <main class="container">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Panel Local</p>
+        <h1>Biblioteca, descargas, subtitulos y Tdarr en una sola vista.</h1>
+        <p id="heroSummary" class="hero-text">Leyendo estado real del servidor...</p>
+        <div class="hero-actions">
+          <a class="primary-button" href="http://192.168.1.100:8265" target="_blank" rel="noopener noreferrer">Abrir Tdarr</a>
+          <a class="secondary-button" href="http://192.168.1.100:3001" target="_blank" rel="noopener noreferrer">Abrir Uptime Kuma</a>
+        </div>
+      </div>
+      <div class="hero-panel" id="summaryGrid"></div>
+    </section>
+
+    <section class="section-block">
+      <div class="section-head">
+        <h2>Servicios</h2>
+        <span id="servicesCaption" class="section-caption"></span>
+      </div>
+      <div id="servicesGrid" class="grid-services"></div>
+    </section>
+
+    <section class="section-block two-column">
+      <div>
+        <div class="section-head">
+          <h2>Almacenamiento</h2>
+          <span class="section-caption">Lectura desde mounts reales</span>
+        </div>
+        <div id="storageGrid" class="storage-grid"></div>
+      </div>
+      <div>
+        <div class="section-head">
+          <h2>Actualizacion</h2>
+          <span class="section-caption">Estado del ultimo refresh</span>
+        </div>
+        <div id="updateCard" class="detail-card"></div>
+      </div>
+    </section>
+
+    <section class="section-block tdarr-layout">
+      <div>
+        <div class="section-head">
+          <h2>Tdarr</h2>
+          <span class="section-caption">Integrado con server + node</span>
+        </div>
+        <div id="tdarrStatus" class="detail-card"></div>
+      </div>
+      <div>
+        <div class="section-head">
+          <h2>Flujo Recomendado</h2>
+          <span class="section-caption">Base segura para ahorrar espacio</span>
+        </div>
+        <div id="tdarrWorkflow" class="detail-card"></div>
+      </div>
+    </section>
+
+    <section class="section-block two-column">
+      <div>
+        <div class="section-head">
+          <h2>Librerias y Rutas</h2>
+          <span class="section-caption">Listo para copiar</span>
+        </div>
+        <div id="libraryList" class="detail-card"></div>
+      </div>
+      <div>
+        <div class="section-head">
+          <h2>Comandos Utiles</h2>
+          <span class="section-caption">Click para copiar</span>
+        </div>
+        <div id="commandsList" class="terminal-block"></div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="footer-credits">Chae Server · Ubuntu · Apache · Docker · Tdarr</div>
+      <div class="footer-sub">Dashboard alimentado por datos cacheados del host y renderizado con JavaScript.</div>
+    </footer>
+  </main>
+
+  <div id="copyBanner" class="copy-banner">Copiado</div>
+  <script src="assets/dashboard.js"></script>
+</body>
+</html>

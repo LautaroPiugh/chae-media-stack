@@ -1,0 +1,25 @@
+services:
+  jellyfin-whatsapp-bot:
+    container_name: jellyfin-whatsapp-bot
+    image: jellyfin-whatsapp-bot:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3555:3555"
+    env_file:
+      - .env
+    volumes:
+      - ./auth:/app/auth
+      - /mnt/media:/mnt/media:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - NODE_ENV=production
+    networks:
+      - media
+
+networks:
+  media:
+    external: true
+    name: qbittorrent_default

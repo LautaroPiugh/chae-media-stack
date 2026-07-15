@@ -1,0 +1,21 @@
+services:
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: chae-radarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Buenos_Aires
+    volumes:
+      - ./config:/config
+      - /mnt/media:/media
+      - /mnt/media2/downloads:/downloads
+    ports:
+      - "7878:7878"
+    networks:
+      - qbittorrent_default
+
+networks:
+  qbittorrent_default:
+    external: true

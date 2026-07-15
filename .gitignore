@@ -1,0 +1,105 @@
+# Everything is ignored by default
+/*
+
+# Except these tracked paths
+!/jellyfin-whatsapp-bot/
+!/services/
+!/scripts/
+!/nginx-proxy-manager/
+!/jellyfin-proxy/
+!/dashboard-staging/
+!/_archived/
+!/assets/
+!/apps/
+!README.md
+!SISTEMA.md
+!LICENSE
+!.gitignore
+!fix-media-mounts.sh
+!index.html
+!index.html.new
+!RESUMEN_MEDIA_STACK_*.md
+!INSTALL.md
+
+# Secrets
+**/.env
+.env
+**/*.env
+
+# But keep example env files
+!.env.example
+!**/.env.example
+
+# Dependencies
+**/node_modules/
+
+# Runtime data
+**/config/
+**/conf/
+**/work/
+**/auth/
+**/data/
+**/letsencrypt/
+**/logs/
+**/cache/
+
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Cache files
+omdb_cache.json
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# User/system dotfiles
+.*
+!.gitignore
+!**/.env.example
+
+# Hidden dirs (opencode, cache, etc.)
+.opencode/
+.local/
+.cache/
+.npm/
+.ssh/
+.warp/
+.wget-hsts
+.bash_history
+.bash_logout
+.bashrc
+.profile
+.tmux.conf
+
+# Docker internal state
+.docker/
+
+# Backups and caches
+**/*.bak
+**/*.bak-*
+**/*.tar.gz
+**/config-backup-*/
+**/github-cache.json
+**/*.sqlite
+
+# Tdarr runtime data
+services/tdarr/server/
+services/tdarr/configs/
+
+# Auth backups / stale sessions
+jellyfin-whatsapp-bot/auth.backup-*/
+_archived/*/auth.*/
+_archived/*/src/store/
+
+# Subtitle downloader (separate subproject)
+scripts/subtitle-downloader/
+
+# IDE
+.idea/
+.vscode/

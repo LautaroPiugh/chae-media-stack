@@ -1,0 +1,18 @@
+services:
+  jellyseerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    init: true
+    container_name: chae-jellyseerr
+    restart: unless-stopped
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+    volumes:
+      - ./config:/app/config
+    ports:
+      - "5055:5055"
+    networks:
+      - qbittorrent_default
+
+networks:
+  qbittorrent_default:
+    external: true

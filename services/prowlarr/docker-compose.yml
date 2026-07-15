@@ -1,0 +1,22 @@
+services:
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: chae-prowlarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Buenos_Aires
+    volumes:
+      - ./config:/config
+    ports:
+      - "9696:9696"
+    networks:
+      - qbittorrent_default
+      - prowlarr_default
+
+networks:
+  qbittorrent_default:
+    external: true
+  prowlarr_default:
+    external: true

@@ -1,0 +1,78 @@
+services:
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:latest
+    container_name: chae-tdarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Buenos_Aires
+      - UMASK_SET=022
+      - serverIP=0.0.0.0
+      - serverPort=8266
+      - webUIPort=8265
+      - internalNode=false
+      - inContainer=true
+      - ffmpegVersion=7
+      - nodeName=chae-tdarr-server
+      - auth=false
+      - openBrowser=false
+      - maxLogSizeMB=10
+    volumes:
+      - ./server:/app/server
+      - ./configs:/app/configs
+      - ./logs:/app/logs
+      - /mnt/media:/media
+      - /mnt/media2/downloads:/downloads
+      - /mnt/media2/downloads/tdarr-cache:/temp
+    ports:
+      - "8265:8265"
+      - "8266:8266"
+    networks:
+      - qbittorrent_default
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "107"
+
+  tdarr-node:
+    image: ghcr.io/haveagitgat/tdarr_node:latest
+    container_name: chae-tdarr-node
+    restart: unless-stopped
+    depends_on:
+      - tdarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Buenos_Aires
+      - UMASK_SET=022
+      - nodeName=chae-tdarr-node
+      - serverIP=chae-tdarr
+      - serverPort=8266
+      - inContainer=true
+      - ffmpegVersion=7
+      - nodeType=mapped
+      - priority=-1
+      - maxLogSizeMB=10
+      - pollInterval=2000
+      - startPaused=false
+      - transcodegpuWorkers=1
+      - transcodecpuWorkers=1
+      - healthcheckgpuWorkers=0
+      - healthcheckcpuWorkers=1
+    volumes:
+      - ./configs:/app/configs
+      - ./logs:/app/logs
+      - /mnt/media:/media
+      - /mnt/media2/downloads:/downloads
+      - /mnt/media2/downloads/tdarr-cache:/temp
+    networks:
+      - qbittorrent_default
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "107"
+
+networks:
+  qbittorrent_default:
+    external: true

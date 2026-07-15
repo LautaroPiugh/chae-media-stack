@@ -1,0 +1,19 @@
+services:
+  subgenai:
+    image: 'mccloud/subgen:cpu'
+    container_name: subgenai
+    restart: unless-stopped
+    volumes:
+      - './models:/subgen/models'
+      - './subgen.env:/subgen/subgen.env:ro'
+      - '/mnt/media:/media:ro'
+    environment:
+      LOG_LEVEL: debug
+      NAME_SERVERS: 9.9.9.9
+      PROCADDEDMEDIA: false
+      PROCMEDIAONPLAY: false
+      CONCURRENT_TRANSCRIPTIONS: 2
+      USE_PATH_MAPPING: false
+      MODEL_PATH: ./models
+    ports:
+      - "9000:9000"

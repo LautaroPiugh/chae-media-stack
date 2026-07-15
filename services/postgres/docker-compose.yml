@@ -1,0 +1,13 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: chae-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: chae
+      POSTGRES_PASSWORD: CHANGEME
+      POSTGRES_DB: chae
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data:/var/lib/postgresql/data

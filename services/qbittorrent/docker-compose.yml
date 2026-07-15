@@ -1,0 +1,25 @@
+services:
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: chae-qbittorrent
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Buenos_Aires
+      - WEBUI_PORT=8080
+      - TORRENTING_PORT=6881
+    volumes:
+      - ./config:/config
+      - /mnt/media2/downloads:/downloads
+      - /mnt/media:/media
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    networks:
+      - qbittorrent_default
+
+networks:
+  qbittorrent_default:
+    external: true

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chae Server — Panel de Servicios</title>
+  <link rel="stylesheet" href="assets/chae.css">
+  <link rel="icon" href="assets/chae-icon.jpg" type="image/jpeg">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div>Servidor Local: <strong>Chae</strong></div>
+    <div class="ip-badge">IP: 192.168.1.100</div>
+  </div>
+
+  <div class="container">
+    
+    <!-- Header -->
+    <header>
+      <div class="header-title-area">
+        <h1>Chae Server</h1>
+        <p>Panel local de servicios y administración</p>
+      </div>
+      <div>
+        <span class="chae-badge">Chaewon Node</span>
+      </div>
+    </header>
+
+    <!-- Services Section -->
+    <section class="section-block">
+      <h2>Servicios y Aplicaciones</h2>
+      <div class="grid-services">
+        
+        <!-- Jellyfin -->
+        <a href="http://192.168.1.100:8096" target="_blank" rel="noopener noreferrer" class="card">
+          <div class="card-header">
+            <span class="card-title">Jellyfin</span>
+            <span class="card-icon">🎬</span>
+          </div>
+          <p class="card-desc">Biblioteca multimedia, transmisión de películas, series y música local.</p>
+          <span class="card-meta">Port 8096</span>
+        </a>
+
+        <!-- Jellyseerr -->
+        <a href="http://192.168.1.100:5055" target="_blank" rel="noopener noreferrer" class="card">
+          <div class="card-header">
+            <span class="card-title">Jellyseerr</span>
+            <span class="card-icon">🎫</span>
+          </div>
+          <p class="card-desc">Solicitudes de contenido. Interfaz para pedir películas y series.</p>
+          <span class="card-meta">Port 5055</span>
+        </a>
+
+        <!-- Sonarr -->
+        <a href="http://192.168.1.100:8989" target="_blank" rel="noopener noreferrer" class="card">
+          <div class="card-header">
+            <span class="card-title">Sonarr</span>
+            <span class="card-icon">📺</span>
+          </div>
+          <p class="card-desc">Gestión y automatización de biblioteca de series de TV.</p>
+          <span class="card-meta">Port 8989</span>
+        </a>
+
+        <!-- Radarr -->
+        <a href="http://192.168.1.100:7878" target="_blank" rel="noopener noreferrer" class="card">
+          <div class="card-header">
+            <span class="card-title">Radarr</span>
+            <span class="card-icon">🎥</span>
+          </div>
+          <p class="card-desc">Gestión y automatización de biblioteca de películas.</p>
+          <span class="card-meta">Port 7878</span>
+        </a>
+
+        <!-- Bazarr -->
+        <a href="http://192.168.1.100:6767" target="_blank" rel="noopener noreferrer" class="card">
+          <div class="card-header">
+            <span class="card-title">Bazarr</span>
+            <span class="card-icon">📝</span>
+          </div>
+          <p class="card-desc">Descarga automática de subtítulos para Radarr/Sonarr.</p>
+          <span class="card-meta">Port 6767</span>
+        </a>
+
+        <!-- Prowlarr -->
+        <a href="http://192.168.1.100:9696" target="_blank" rel="noopener noreferrer" class="card">
+          <div class="card-header">
+            <span class="card-title">Prowlarr</span>
+            <span class="card-icon">🔍</span>
+          </div>
+          <p class="card-desc">Administrador de indexadores y trackers Torrent/Usenet.</p>
+          <span class="card-meta">Port 9696</span>
+        </a>
+
+        <!-- qBittorrent -->
+        <a href="http://192.168.1.100:8080" target="_blank" rel="noopener noreferrer" class="card">
+          <div class="card-header">
+            <span class="card-title">qBittorrent</span>
+            <span class="card-icon">📥</span>
+          </div>
+          <p class="card-desc">Cliente de descargas BitTorrent. Gestor de archivos torrent.</p>
+          <span class="card-meta">Port 8080</span>
+        </a>
+
+        <!-- Flaresolverr -->
+        <a href="http://192.168.1.100:8191" target="_blank" rel="noopener noreferrer" class="card">
+          <div class="card-header">
+            <span class="card-title">Flaresolverr</span>
+            <span class="card-icon">🔥</span>
+          </div>
+          <p class="card-desc">Bypass de Cloudflare para scraping de trackers protegidos.</p>
+          <span class="card-meta">Port 8191</span>
+        </a>
+
+        <!-- Uptime Kuma -->
+        <a href="http://192.168.1.100:3001" target="_blank" rel="noopener noreferrer" class="card">
+          <div class="card-header">
+            <span class="card-title">Uptime Kuma</span>
+            <span class="card-icon">📊</span>
+          </div>
+          <p class="card-desc">Monitoreo de servicios. Alertas y estado en tiempo real.</p>
+          <span class="card-meta">Port 3001</span>
+        </a>
+
+        <!-- Portainer -->
+        <a href="https://192.168.1.100:9443" target="_blank" rel="noopener noreferrer" class="card">
+          <div class="card-header">
+            <span class="card-title">Portainer</span>
+            <span class="card-icon">🐳</span>
+          </div>
+          <p class="card-desc">Panel gráfico de control y monitorización de contenedores Docker.</p>
+          <span class="card-meta">Port 9443 (HTTPS)</span>
+        </a>
+
+        <!-- Apache -->
+        <a href="http://192.168.1.100" target="_blank" rel="noopener noreferrer" class="card">
+          <div class="card-header">
+            <span class="card-title">Apache</span>
+            <span class="card-icon">🌐</span>
+          </div>
+          <p class="card-desc">Servidor web local. Aloja este panel de administración.</p>
+          <span class="card-meta">Port 80</span>
+        </a>
+
+        <!-- Samba -->
+        <div class="card card-samba" onclick="copyText('\\\\TU_IP\\Shared')">
+          <div class="card-header">
+            <span class="card-title">Samba Share</span>
+            <span class="card-icon">📂</span>
+          </div>
+          <p class="card-desc">Carpeta de red compartida para transferir archivos multimedia.</p>
+          <span class="card-meta">\\TU_IP\Shared</span>
+          <button class="samba-copy-btn">Copiar Ruta de Red</button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Secondary Split Layout (Paths & Status) -->
+    <div class="secondary-grid section-block">
+      
+      <!-- Paths Useful -->
+      <div>
+        <h2>Rutas Útiles del Sistema</h2>
+        <div class="paths-list">
+          <div class="path-item">
+            <span class="path-label">Almacenamiento Media</span>
+            <span class="path-text" onclick="copyText('/mnt/media')">/mnt/media</span>
+          </div>
+          <div class="path-item">
+            <span class="path-label">Películas</span>
+            <span class="path-text" onclick="copyText('/mnt/media/movies')">/mnt/media/movies</span>
+          </div>
+          <div class="path-item">
+            <span class="path-label">Series de TV</span>
+            <span class="path-text" onclick="copyText('/mnt/media/series')">/mnt/media/series</span>
+          </div>
+          <div class="path-item">
+            <span class="path-label">Descargas de Torrents</span>
+            <span class="path-text" onclick="copyText('/mnt/media/downloads/torrents')">/mnt/media/downloads/torrents</span>
+          </div>
+          <div class="path-item">
+            <span class="path-label">Anime</span>
+            <span class="path-text" onclick="copyText('/mnt/media/anime')">/mnt/media/anime</span>
+          </div>
+          <div class="path-item">
+            <span class="path-label">Música</span>
+            <span class="path-text" onclick="copyText('/mnt/media/music')">/mnt/media/music</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Expected Status Indicators -->
+      <div>
+        <h2>Estado Esperado</h2>
+        <div class="status-card">
+          <div class="status-grid">
+            <div class="status-item">
+              <span class="status-name">Docker Services</span>
+              <span class="status-chip">Configured</span>
+            </div>
+            <div class="status-item">
+              <span class="status-name">Media Storage</span>
+              <span class="status-chip">Ready</span>
+            </div>
+            <div class="status-item">
+              <span class="status-name">LAN Access</span>
+              <span class="status-chip">Ready</span>
+            </div>
+            <div class="status-item">
+              <span class="status-name">Tailscale VPN</span>
+              <span class="status-chip">Configured</span>
+            </div>
+          </div>
+          <div class="status-disclaimer">
+            <span>ℹ️</span> Los indicadores de estado son estáticos por el momento.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Terminal/Useful Commands Section -->
+    <section class="section-block">
+      <h2>Comandos Útiles</h2>
+      <div class="terminal-block">
+        <div class="terminal-title">Consola de Referencia Rápida (Haz clic para copiar)</div>
+        
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('ssh usuario@TU_IP')">ssh usuario@TU_IP</span>
+          <span class="terminal-comment"># Acceso seguro mediante SSH</span>
+        </div>
+
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('docker ps')">docker ps</span>
+          <span class="terminal-comment"># Ver contenedores en ejecución</span>
+        </div>
+
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('docker stats')">docker stats</span>
+          <span class="terminal-comment"># Monitorizar recursos de contenedores</span>
+        </div>
+
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('df -h /mnt/media')">df -h /mnt/media</span>
+          <span class="terminal-comment"># Comprobar espacio del disco multimedia</span>
+        </div>
+
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('sudo ufw status numbered')">sudo ufw status numbered</span>
+          <span class="terminal-comment"># Verificar reglas de cortafuegos</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <div class="footer-credits">Chae Server · Ubuntu · Apache · Docker</div>
+      <div class="footer-sub">Inspirado en Kim Chaewon • Construido con precisión minimalista local</div>
+    </footer>
+
+  </div>
+
+  <!-- Notification Popup Banner -->
+  <div id="copyBanner" class="copy-banner">¡Copiado al portapapeles!</div>
+
+  <!-- Micro JavaScript Helper for Clipboard Copying -->
+  <script>
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(function() {
+        const banner = document.getElementById('copyBanner');
+        banner.textContent = '¡Copiado: ' + text + '!';
+        banner.classList.add('show');
+        setTimeout(function() {
+          banner.classList.remove('show');
+        }, 2000);
+      }, function(err) {
+        console.error('Error al copiar el texto: ', err);
+      });
+    }
+  </script>
+</body>
+</html>

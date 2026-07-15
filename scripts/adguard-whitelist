@@ -1,0 +1,51 @@
+#!/bin/bash
+
+DOMAIN="$1"
+if [ -z "$DOMAIN" ]; then
+  echo "Uso: adguard-whitelist <dominio>"
+  echo "Ej: adguard-whitelist ejemplo.com"
+  exit 1
+fi
+
+RULE="@@||${DOMAIN}^"
+TMPFILE="/tmp/adguard-whitelist-$$.yaml"
+
+docker cp chae-adguard:/opt/adguardhome/conf/AdGuardHome.yaml "$TMPFILE" 2>/dev/null
+if [ $? -ne 0 ] || [ ! -s "$TMPFILE" ]; then
+  echo "No se pudo leer la config de AdGuard. Esta corriendo?"
+  exit 1
+fi
+
+python3 -c "
+import sys, yaml
+
+rule = sys.argv[1]
+path = sys.argv[2]
+
+with open(path) as f:
+    config = yaml.safe_load(f)
+
+user_rules = config.get('user_rules', [])
+if rule in user_rules:
+    sys.exit(0)
+
+user_rules.append(rule)
+config['user_rules'] = user_rules
+
+with open(path, 'w') as f:
+    yaml.dump(config, f, default_flow_style=False)
+
+sys.exit(1)
+" "$RULE" "$TMPFILE"
+
+RESULT=$?
+if [ $RESULT -eq 0 ]; then
+  echo "$DOMAIN ya esta en la whitelist"
+  rm -f "$TMPFILE"
+  exit 0
+fi
+
+docker cp "$TMPFILE" chae-adguard:/opt/adguardhome/conf/AdGuardHome.yaml
+rm -f "$TMPFILE"
+docker restart chae-adguard > /dev/null
+echo "$DOMAIN agregado a la whitelist de AdGuard"

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chae Server — Panel de Servicios</title>
+  <link rel="stylesheet" href="assets/chae.css">
+  <link rel="icon" href="assets/chae-icon.jpg" type="image/jpeg">
+</head>
+<body>
+
+  <div class="topbar">
+    <div>Servidor Local: <strong>Chae</strong></div>
+    <div class="ip-badge">IP: 192.168.1.100</div>
+  </div>
+
+  <div class="container">
+    
+    <header>
+      <div class="header-title-area">
+        <h1>Chae Server</h1>
+        <p>Panel local de servicios y administración</p>
+      </div>
+      <div>
+        <span class="chae-badge">Chaewon Node</span>
+      </div>
+    </header>
+
+    <section class="section-block">
+      <h2>Servicios y Aplicaciones</h2>
+      <div class="grid-services">
+        
+        <a href="http://192.168.1.100:8096" target="_blank" class="card">
+          <div class="card-header">
+            <span class="card-title">Jellyfin</span>
+            <span class="card-icon">🎬</span>
+          </div>
+          <p class="card-desc">Biblioteca multimedia, películas, series y música local.</p>
+          <span class="card-meta">Port 8096</span>
+        </a>
+
+        <a href="http://192.168.1.100:5055" target="_blank" class="card">
+          <div class="card-header">
+            <span class="card-title">Jellyseerr</span>
+            <span class="card-icon">🎫</span>
+          </div>
+          <p class="card-desc">Solicitudes de contenido. Interfaz para pedir películas y series.</p>
+          <span class="card-meta">Port 5055</span>
+        </a>
+
+        <a href="http://192.168.1.100:8989" target="_blank" class="card">
+          <div class="card-header">
+            <span class="card-title">Sonarr</span>
+            <span class="card-icon">📺</span>
+          </div>
+          <p class="card-desc">Gestión y automatización de biblioteca de series de TV.</p>
+          <span class="card-meta">Port 8989</span>
+        </a>
+
+        <a href="http://192.168.1.100:7878" target="_blank" class="card">
+          <div class="card-header">
+            <span class="card-title">Radarr</span>
+            <span class="card-icon">🎥</span>
+          </div>
+          <p class="card-desc">Gestión y automatización de biblioteca de películas.</p>
+          <span class="card-meta">Port 7878</span>
+        </a>
+
+        <a href="http://192.168.1.100:6767" target="_blank" class="card">
+          <div class="card-header">
+            <span class="card-title">Bazarr</span>
+            <span class="card-icon">📝</span>
+          </div>
+          <p class="card-desc">Descarga automática de subtítulos para Radarr/Sonarr.</p>
+          <span class="card-meta">Port 6767</span>
+        </a>
+
+        <a href="http://192.168.1.100:9696" target="_blank" class="card">
+          <div class="card-header">
+            <span class="card-title">Prowlarr</span>
+            <span class="card-icon">🔍</span>
+          </div>
+          <p class="card-desc">Administrador de indexadores y trackers Torrent/Usenet.</p>
+          <span class="card-meta">Port 9696</span>
+        </a>
+
+        <a href="http://192.168.1.100:8080" target="_blank" class="card">
+          <div class="card-header">
+            <span class="card-title">qBittorrent</span>
+            <span class="card-icon">📥</span>
+          </div>
+          <p class="card-desc">Cliente de descargas BitTorrent. Gestor de archivos torrent.</p>
+          <span class="card-meta">Port 8080</span>
+        </a>
+
+        <a href="http://192.168.1.100:8191" target="_blank" class="card">
+          <div class="card-header">
+            <span class="card-title">Flaresolverr</span>
+            <span class="card-icon">🔥</span>
+          </div>
+          <p class="card-desc">Bypass de Cloudflare para scraping de trackers protegidos.</p>
+          <span class="card-meta">Port 8191</span>
+        </a>
+
+        <a href="https://192.168.1.100:9443" target="_blank" class="card">
+          <div class="card-header">
+            <span class="card-title">Portainer</span>
+            <span class="card-icon">🐳</span>
+          </div>
+          <p class="card-desc">Panel gráfico de control y monitorización de contenedores Docker.</p>
+          <span class="card-meta">Port 9443 (HTTPS)</span>
+        </a>
+
+        <a href="http://192.168.1.100" target="_blank" class="card">
+          <div class="card-header">
+            <span class="card-title">Apache</span>
+            <span class="card-icon">🌐</span>
+          </div>
+          <p class="card-desc">Servidor web local. Aloja este panel de administración.</p>
+          <span class="card-meta">Port 80</span>
+        </a>
+
+        <div class="card card-samba" onclick="copyText('\\\\TU_IP\\Shared')">
+          <div class="card-header">
+            <span class="card-title">Samba Share</span>
+            <span class="card-icon">📂</span>
+          </div>
+          <p class="card-desc">Carpeta de red compartida para transferir archivos multimedia.</p>
+          <span class="card-meta">\\TU_IP\Shared</span>
+          <button class="samba-copy-btn">Copiar Ruta de Red</button>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="section-block">
+      <h2>Bot de WhatsApp 📱</h2>
+      <div class="terminal-block" style="margin-bottom: 20px;">
+        <div class="terminal-title">Comandos del Bot — Escribe en WhatsApp al +54 934 257 86643</div>
+        <table class="bot-commands-table" style="width: 100%; text-align: left; font-size: 13px;">
+          <thead>
+            <tr style="border-bottom: 1px solid #444;">
+              <th style="padding: 8px 12px; color: #8ab4f8;">Comando</th>
+              <th style="padding: 8px 12px; color: #8ab4f8;">Descripción</th>
+              <th style="padding: 8px 12px; color: #8ab4f8;">Ejemplo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="3" style="padding: 10px 12px; background: #2a2a2a; color: #f9a825; font-weight: bold;">🔒 Admin (solo vos + /registraradmin)</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/registraradmin</td><td style="padding: 8px 12px; color: #ccc;">Verificar tu sesión como admin (requiere 1 vez)</td><td style="padding: 8px 12px; color: #888;">/registraradmin</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/reiniciar</td><td style="padding: 8px 12px; color: #ccc;">Reinicia el bot por completo</td><td style="padding: 8px 12px; color: #888;">Solo admin</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/reconectar</td><td style="padding: 8px 12px; color: #ccc;">Reconecta WhatsApp sin reiniciar todo</td><td style="padding: 8px 12px; color: #888;">Solo admin</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/eliminar [nombre]</td><td style="padding: 8px 12px; color: #ccc;">Busca y elimina series/películas de Sonarr/Radarr</td><td style="padding: 8px 12px; color: #888;">/eliminar Modern Family</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/refrescar [nombre]</td><td style="padding: 8px 12px; color: #ccc;">Fuerza reescaneo en Bazarr</td><td style="padding: 8px 12px; color: #888;">/refrescar Modern Family</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/actualizar [nombre]</td><td style="padding: 8px 12px; color: #ccc;">Busca nueva versión de película/serie</td><td style="padding: 8px 12px; color: #888;">/actualizar Interestelar</td></tr>
+            <tr><td colspan="3" style="padding: 10px 12px; background: #2a2a2a; color: #66bb6a; font-weight: bold;">🔍 Búsquedas — Todos</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/peli [nombre]</td><td style="padding: 8px 12px; color: #ccc;">Busca películas en Radarr</td><td style="padding: 8px 12px; color: #888;">/peli Interestelar</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/serie [nombre]</td><td style="padding: 8px 12px; color: #ccc;">Busca series en Sonarr</td><td style="padding: 8px 12px; color: #888;">/serie Modern Family</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/catalogo [tipo]</td><td style="padding: 8px 12px; color: #ccc;">Muestra catálogo completo (todo/peli/serie)</td><td style="padding: 8px 12px; color: #888;">/catalogo serie</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/faltantes [tipo]</td><td style="padding: 8px 12px; color: #ccc;">Muestra contenido sin descargar</td><td style="padding: 8px 12px; color: #888;">/faltantes</td></tr>
+            <tr><td colspan="3" style="padding: 10px 12px; background: #2a2a2a; color: #ba68c8; font-weight: bold;">🎲 Descubrir — Todos</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/random [tipo]</td><td style="padding: 8px 12px; color: #ccc;">Recomendación aleatoria no vista</td><td style="padding: 8px 12px; color: #888;">/random serie</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/recomendar [género]</td><td style="padding: 8px 12px; color: #ccc;">Recomendación por género (español)</td><td style="padding: 8px 12px; color: #888;">/recomendar accion</td></tr>
+            <tr><td colspan="3" style="padding: 10px 12px; background: #2a2a2a; color: #ef5350; font-weight: bold;">📥 Descargas — Todos</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/cola</td><td style="padding: 8px 12px; color: #ccc;">Cola de downloads Sonarr/Radarr</td><td style="padding: 8px 12px; color: #888;">/cola</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/descargas</td><td style="padding: 8px 12px; color: #ccc;">Torrents activos en qBittorrent</td><td style="padding: 8px 12px; color: #888;">/descargas</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/requests</td><td style="padding: 8px 12px; color: #ccc;">Requests pendientes en Jellyseerr</td><td style="padding: 8px 12px; color: #888;">/requests</td></tr>
+            <tr><td colspan="3" style="padding: 10px 12px; background: #2a2a2a; color: #4dd0e1; font-weight: bold;">🔄 Navegación — Todos</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/mas</td><td style="padding: 8px 12px; color: #ccc;">Más resultados de búsqueda actual</td><td style="padding: 8px 12px; color: #888;">Después de buscar</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/repetir</td><td style="padding: 8px 12px; color: #ccc;">Repite la última búsqueda</td><td style="padding: 8px 12px; color: #888;">/repetir</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/cancelar</td><td style="padding: 8px 12px; color: #ccc;">Cancela el flujo de selección</td><td style="padding: 8px 12px; color: #888;">/cancelar</td></tr>
+            <tr><td colspan="3" style="padding: 10px 12px; background: #2a2a2a; color: #ffca28; font-weight: bold;">📊 Info — Todos</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/status</td><td style="padding: 8px 12px; color: #ccc;">Estado del bot y servicios</td><td style="padding: 8px 12px; color: #888;">/status</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/ultimo</td><td style="padding: 8px 12px; color: #ccc;">Último contenido agregado</td><td style="padding: 8px 12px; color: #888;">/ultimo</td></tr>
+            <tr><td style="padding: 8px 12px; color: #81d4fa;">/ayuda</td><td style="padding: 8px 12px; color: #ccc;">Lista completa de comandos</td><td style="padding: 8px 12px; color: #888;">/ayuda</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-top: 15px;">
+        <div style="color: #f9a825; font-weight: bold; margin-bottom: 8px;">📌 Notas</div>
+        <ul style="color: #ccc; font-size: 13px; margin: 0; padding-left: 20px; line-height: 1.8;">
+          <li>Las búsquedas aceptan números para seleccionar resultado (ej: <span style="color: #81d4fa;">2</span>)</li>
+          <li>Comandos tipo <span style="color: #81d4fa;">confirmar eliminar</span> vienen después de una búsqueda</li>
+          <li><span style="color: #81d4fa;">/random</span> y <span style="color: #81d4fa;">/recomendar</span> priorizan contenido no visto, con sinopsis y trailer</li>
+          <li>Notificaciones de descarga llegan al solicitante y al admin</li>
+          <li>Primero usá <span style="color: #81d4fa;">/registraradmin</span> para activar comandos de admin</li>
+        </ul>
+      </div>
+    </section>
+
+    <div class="secondary-grid section-block">
+      
+      <div>
+        <h2>Rutas Útiles</h2>
+        <div class="paths-list">
+          <div class="path-item">
+            <span class="path-label">Almacenamiento Media</span>
+            <span class="path-text" onclick="copyText('/mnt/media')">/mnt/media</span>
+          </div>
+          <div class="path-item">
+            <span class="path-label">Películas</span>
+            <span class="path-text" onclick="copyText('/mnt/media/movies')">/mnt/media/movies</span>
+          </div>
+          <div class="path-item">
+            <span class="path-label">Series de TV</span>
+            <span class="path-text" onclick="copyText('/mnt/media/series')">/mnt/media/series</span>
+          </div>
+          <div class="path-item">
+            <span class="path-label">Torrents</span>
+            <span class="path-text" onclick="copyText('/mnt/media/downloads/torrents')">/mnt/media/downloads/torrents</span>
+          </div>
+          <div class="path-item">
+            <span class="path-label">Anime</span>
+            <span class="path-text" onclick="copyText('/mnt/media/anime')">/mnt/media/anime</span>
+          </div>
+          <div class="path-item">
+            <span class="path-label">Música</span>
+            <span class="path-text" onclick="copyText('/mnt/media/music')">/mnt/media/music</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2>Estado en Vivo</h2>
+        <div class="status-card">
+          <div class="status-grid" id="statusGrid">
+            <div class="status-item">
+              <span class="status-name">Docker Services</span>
+              <span class="status-chip" id="dockerStatus">⏳ consultando...</span>
+            </div>
+            <div class="status-item">
+              <span class="status-name">Media Disk</span>
+              <span class="status-chip" id="mediaStatus">⏳ consultando...</span>
+            </div>
+            <div class="status-item">
+              <span class="status-name">WhatsApp Bot</span>
+              <span class="status-chip" id="botStatus">⏳ consultando...</span>
+            </div>
+            <div class="status-item">
+              <span class="status-name">Jellyfin</span>
+              <span class="status-chip" id="jellyfinStatus">⏳ consultando...</span>
+            </div>
+            <div class="status-item">
+              <span class="status-name">Sonarr</span>
+              <span class="status-chip" id="sonarrStatus">⏳ consultando...</span>
+            </div>
+            <div class="status-item">
+              <span class="status-name">Radarr</span>
+              <span class="status-chip" id="radarrStatus">⏳ consultando...</span>
+            </div>
+          </div>
+          <div class="status-disclaimer">
+            <span>ℹ️</span> Actualizado cada 60 segundos · <a href="http://192.168.1.100:3555/status" target="_blank" style="color: #8ab4f8;">API directa</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <section class="section-block">
+      <h2>Comandos Útiles</h2>
+      <div class="terminal-block">
+        <div class="terminal-title">Consola de Referencia Rápida (Haz clic para copiar)</div>
+        
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('ssh usuario@TU_IP')">ssh usuario@TU_IP</span>
+          <span class="terminal-comment"># Acceso seguro mediante SSH</span>
+        </div>
+
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('docker ps')">docker ps</span>
+          <span class="terminal-comment"># Ver contenedores en ejecución</span>
+        </div>
+
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('docker stats')">docker stats</span>
+          <span class="terminal-comment"># Monitorizar recursos de contenedores</span>
+        </div>
+
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('df -h /mnt/media')">df -h /mnt/media</span>
+          <span class="terminal-comment"># Comprobar espacio del disco multimedia</span>
+        </div>
+
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('mediastat')">mediastat</span>
+          <span class="terminal-comment"># Estado del disco media (alias)</span>
+        </div>
+
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('medialog')">medialog</span>
+          <span class="terminal-comment"># Ver logs del servicio de recuperación</span>
+        </div>
+
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('mediatimer')">mediatimer</span>
+          <span class="terminal-comment"># Ver siguiente ejecución del timer</span>
+        </div>
+
+        <div class="terminal-cmd-line">
+          <span class="terminal-prompt">chae@local:~$</span>
+          <span class="terminal-cmd" onclick="copyText('mediafix')">mediafix</span>
+          <span class="terminal-comment"># Forzar revisión inmediata del disco</span>
+        </div>
+
+      </div>
+    </section>
+
+    <footer>
+      <div class="footer-credits">Chae Server · Ubuntu · Apache · Docker</div>
+      <div class="footer-sub">Inspirado en Kim Chaewon • Construido con precisión minimalista local</div>
+    </footer>
+
+  </div>
+
+  <div id="copyBanner" class="copy-banner">¡Copiado al portapapeles!</div>
+
+  <script>
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(function() {
+        const banner = document.getElementById('copyBanner');
+        banner.textContent = '¡Copiado: ' + text + '!';
+        banner.classList.add('show');
+        setTimeout(function() { banner.classList.remove('show'); }, 2000);
+      }, function(err) { console.error('Error al copiar: ', err); });
+    }
+
+    async function updateStatus() {
+      try {
+        const r = await fetch('http://192.168.1.100:3555/status');
+        const d = await r.json();
+        document.getElementById('botStatus').textContent = d.whatsappConnected ? '🟢 conectado' : '🔴 desconectado';
+      } catch { document.getElementById('botStatus').textContent = '🔴 sin conexión'; }
+
+      try {
+        const r = await fetch('http://192.168.1.100:8989/api/v3/system/status', { headers: { 'X-Api-Key': 'TU_API_KEY_SONARR' }});
+        document.getElementById('sonarrStatus').textContent = r.ok ? '🟢 disponible' : '🔴 error';
+      } catch { document.getElementById('sonarrStatus').textContent = '🔴 no disponible'; }
+
+      try {
+        const r = await fetch('http://192.168.1.100:7878/api/v3/system/status', { headers: { 'X-Api-Key': 'TU_API_KEY_RADARR' }});
+        document.getElementById('radarrStatus').textContent = r.ok ? '🟢 disponible' : '🔴 error';
+      } catch { document.getElementById('radarrStatus').textContent = '🔴 no disponible'; }
+
+      try {
+        const r = await fetch('http://192.168.1.100:8096/health');
+        document.getElementById('jellyfinStatus').textContent = r.ok ? '🟢 disponible' : '🔴 error';
+      } catch { document.getElementById('jellyfinStatus').textContent = '🔴 no disponible'; }
+    }
+
+    async function checkMediaDisk() {
+      try {
+        const r = await fetch('http://192.168.1.100:8096/Health');
+        document.getElementById('mediaStatus').textContent = r.ok ? '🟢 montado' : '🔴 faltante';
+      } catch { document.getElementById('mediaStatus').textContent = '🔴 no disponible'; }
+    }
+
+    updateStatus();
+    checkMediaDisk();
+    setInterval(updateStatus, 60000);
+  </script>
+</body>
+</html>

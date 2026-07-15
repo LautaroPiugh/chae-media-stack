@@ -1,0 +1,20 @@
+services:
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: chae-jellyfin
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Buenos_Aires
+      - JELLYFIN_PublishedServerUri=http://192.168.1.100:8096
+    volumes:
+      - ./config:/config
+      - /mnt/media:/media
+    ports:
+      - "8096:8096"
+      - "8920:8920"
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    group_add:
+      - "107"

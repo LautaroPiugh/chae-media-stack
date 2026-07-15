@@ -1,0 +1,23 @@
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: chae-uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - UPTIME_KUMA_PORT=3001
+      - TZ=America/Argentina/Buenos_Aires
+    networks:
+      - media
+      - jellyfin
+
+networks:
+  media:
+    external: true
+    name: qbittorrent_default
+  jellyfin:
+    external: true
+    name: jellyfin_default

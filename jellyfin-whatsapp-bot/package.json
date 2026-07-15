@@ -1,0 +1,27 @@
+{
+  "name": "jellyfin-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Personal WhatsApp bot for Jellyfin server with Radarr/Sonarr integration",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [
+    "jellyfin",
+    "radarr",
+    "sonarr",
+    "whatsapp",
+    "bot"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "6.17.16",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "pino": "^9.4.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

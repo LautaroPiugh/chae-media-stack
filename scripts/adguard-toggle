@@ -1,0 +1,24 @@
+#!/bin/bash
+
+case "$1" in
+  on|start)
+    docker start chae-adguard 2>/dev/null
+    echo "AdGuard encendido"
+    ;;
+  off|stop)
+    docker stop chae-adguard 2>/dev/null
+    echo "AdGuard apagado"
+    ;;
+  status)
+    if docker ps --format '{{.Names}}' -f name=chae-adguard 2>/dev/null | grep -q chae-adguard; then
+      echo "AdGuard: ENCENDIDO"
+    else
+      echo "AdGuard: APAGADO"
+    fi
+    ;;
+  *)
+    echo "Uso: adguard-toggle [on|off|status]"
+    echo "Ej: adguard-toggle off"
+    exit 1
+    ;;
+esac

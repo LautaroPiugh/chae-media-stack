@@ -1,0 +1,20 @@
+services:
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: chae-sonarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Buenos_Aires
+    volumes:
+      - ./config:/config
+      - /mnt/media:/media
+    ports:
+      - "8989:8989"
+    networks:
+      - qbittorrent_default
+
+networks:
+  qbittorrent_default:
+    external: true

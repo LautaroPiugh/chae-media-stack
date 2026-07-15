@@ -1,0 +1,20 @@
+services:
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: chae-bazarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Buenos_Aires
+    volumes:
+      - ./config:/config
+      - /mnt/media:/media
+    ports:
+      - "6767:6767"
+    networks:
+      - qbittorrent_default
+
+networks:
+  qbittorrent_default:
+    external: true

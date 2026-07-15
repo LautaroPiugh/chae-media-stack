@@ -1,0 +1,11 @@
+services:
+  jellyfin-whatsapp-notifier:
+    build: .
+    container_name: jellyfin-whatsapp-notifier
+    restart: unless-stopped
+    ports:
+      - "3555:3555"
+    env_file:
+      - .env
+    volumes:
+      - ./auth:/app/auth
