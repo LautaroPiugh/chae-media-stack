@@ -19,7 +19,7 @@ SERVICES=(
   "Flaresolverr:chae-flaresolverr:http:8191"
   "SubgenAI:subgenai:http:9000"
   "Tdarr:chae-tdarr:http:8265"
-  "Tdarr Node:chae-tdarr-node:tcp:8266"
+  "Tdarr Node:chae-tdarr-node:docker-tcp:chae-tdarr,8266"
   "Uptime Kuma:chae-uptime-kuma:http:3001"
   "Homepage:chae-homepage:http:3003"
   "WhatsApp Bot:jellyfin-whatsapp-bot:http:3555"
@@ -53,6 +53,22 @@ check_tcp() {
   local port="$1"
   timeout 2 bash -c "echo > /dev/tcp/localhost/$port" 2>/dev/null && return 0
   return 1
+}
+
+check_docker_tcp() {
+  local container="$1"
+  local host="$2"
+  local port="$3"
+
+  docker exec "$container" node -e '
+    const net = require("net");
+    const socket = net.connect(Number(process.argv[2]), process.argv[1]);
+    socket.setTimeout(3000);
+    socket.once("connect", () => socket.end());
+    socket.once("close", hadError => process.exit(hadError ? 1 : 0));
+    socket.once("timeout", () => socket.destroy(new Error("timeout")));
+    socket.once("error", () => process.exit(1));
+  ' "$host" "$port" >/dev/null 2>&1
 }
 
 total=0
@@ -103,6 +119,17 @@ for service in "${SERVICES[@]}"; do
       else
         printf "  ${YELLOW}~${NC} %-20s %-25s ${YELLOW}%s${NC}\n" "$label" "($container)" "Puerto $port cerrado"
         up=$((up + 1))
+      fi
+      ;;
+    docker-tcp)
+      target_host="${port%,*}"
+      target_port="${port##*,}"
+      if check_docker_tcp "$container" "$target_host" "$target_port"; then
+        printf "  ${GREEN}✔${NC} %-20s %-25s ${GREEN}%s${NC}\n" "$label" "($container)" "Docker $target_host:$target_port OK"
+        up=$((up + 1))
+      else
+        printf "  ${RED}✘${NC} %-20s %-25s ${RED}%s${NC}\n" "$label" "($container)" "Docker $target_host:$target_port no responde"
+        down=$((down + 1))
       fi
       ;;
   esac

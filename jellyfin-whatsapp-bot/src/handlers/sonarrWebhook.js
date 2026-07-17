@@ -3,6 +3,7 @@ const config = require('../config');
 const { isDuplicate } = require('../utils/dedupe');
 const { sonarrEpisodeMessage } = require('../utils/formatMessage');
 const { sendCompletionMessage } = require('../utils/requestNotifications');
+const { isValidToken } = require('../utils/httpAuth');
 
 const router = express.Router();
 
@@ -14,8 +15,8 @@ function getQuality(episodeFile) {
 }
 
 function validateSecret(req, secret) {
-  if (!secret) return true;
-  return req.query.token === secret;
+  const provided = req.get('x-webhook-token') || req.query.token || '';
+  return isValidToken(secret, provided);
 }
 
 router.post('/sonarr', async (req, res) => {
@@ -100,7 +101,7 @@ router.post('/sonarr', async (req, res) => {
     await sendCompletionMessage('series', series.id, msg);
   }
 
-  console.log(`[Sonarr webhook] Notification sent for ${series.title}`);
+  console.log('[Sonarr webhook] Notification sent');
 
   res.json({ ok: true });
 });

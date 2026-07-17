@@ -9,6 +9,21 @@ const config = {
     updateNotifyToken: process.env.WHATSAPP_UPDATE_NOTIFY_TOKEN || '',
   },
 
+  admin: {
+    registerCode: process.env.ADMIN_REGISTER_CODE || '',
+    botToken: process.env.BOT_ADMIN_TOKEN || '',
+  },
+
+  webhooks: {
+    uptimeKumaSecret: process.env.UPTIME_KUMA_SECRET || '',
+  },
+
+  adguard: {
+    url: process.env.ADGUARD_URL || 'http://chae-adguard:3000',
+    username: process.env.ADGUARD_USERNAME || '',
+    password: process.env.ADGUARD_PASSWORD || '',
+  },
+
   jellyfin: {
     url: process.env.JELLYFIN_URL || '',
     apiKey: process.env.JELLYFIN_API_KEY || '',

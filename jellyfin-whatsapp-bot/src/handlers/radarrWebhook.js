@@ -3,6 +3,7 @@ const config = require('../config');
 const { isDuplicate } = require('../utils/dedupe');
 const { radarrMovieMessage } = require('../utils/formatMessage');
 const { sendCompletionMessage } = require('../utils/requestNotifications');
+const { isValidToken } = require('../utils/httpAuth');
 
 const router = express.Router();
 
@@ -14,8 +15,8 @@ function getQuality(movieFile) {
 }
 
 function validateSecret(req, secret) {
-  if (!secret) return true;
-  return req.query.token === secret;
+  const provided = req.get('x-webhook-token') || req.query.token || '';
+  return isValidToken(secret, provided);
 }
 
 router.post('/radarr', async (req, res) => {
@@ -74,7 +75,7 @@ router.post('/radarr', async (req, res) => {
   }, isUpgrade);
 
   await sendCompletionMessage('movie', event.movie.id, message);
-  console.log(`[Radarr webhook] Notification sent for ${event.movie.title}`);
+  console.log('[Radarr webhook] Notification sent');
 
   res.json({ ok: true });
 });

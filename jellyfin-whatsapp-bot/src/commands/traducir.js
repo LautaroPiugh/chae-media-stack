@@ -1,13 +1,20 @@
-const { execSync } = require('child_process');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const { isAdminUser, formatNoPermission } = require('./admin');
 const { formatPanel } = require('../utils/panel');
 const { formatErrorPanel } = require('../utils/formatMessage');
 const path = require('path');
 
 const SCRIPT_PATH = path.join(__dirname, '../../../scripts/check_es_subs.py');
+const execFileAsync = promisify(execFile);
+const MAX_TITLE_LENGTH = 200;
 
-async function handleTraducir(text) {
-  const lower = text.toLowerCase().trim();
-  const title = lower.replace('/traducir', '').trim();
+async function handleTraducir(text, userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
+  const title = text.replace(/^\/traducir\s*/i, '').trim();
 
   if (!title) {
     return formatErrorPanel('Traducir película', [
@@ -16,11 +23,17 @@ async function handleTraducir(text) {
     ]);
   }
 
+  if (title.length > MAX_TITLE_LENGTH || /[\x00-\x1f\x7f]/.test(title)) {
+    return formatErrorPanel('Traducir película', ['El título contiene caracteres inválidos o es demasiado largo']);
+  }
+
   try {
-    const output = execSync(
-      `python3 "${SCRIPT_PATH}" --translate-movie "${title.replace(/"/g, '\\"')}"`,
-      { timeout: 300000, encoding: 'utf-8' }
-    ).trim();
+    const { stdout } = await execFileAsync(
+      'python3',
+      [SCRIPT_PATH, '--translate-movie', title],
+      { timeout: 300000, encoding: 'utf-8', maxBuffer: 1024 * 1024 }
+    );
+    const output = stdout.trim();
 
     const lines = output.split('\n').filter(l => !l.startsWith('['));
     const clean = lines.join('\n').trim() || output.trim();
@@ -30,7 +43,7 @@ async function handleTraducir(text) {
     ]);
   } catch (err) {
     return formatErrorPanel('Error de traducción', [
-      err.message.substring(0, 200),
+      `El proceso de traducción falló${err.code ? ` (${err.code})` : ''}`,
     ]);
   }
 }

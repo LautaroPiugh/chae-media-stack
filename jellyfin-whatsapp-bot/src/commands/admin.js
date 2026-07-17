@@ -1,5 +1,6 @@
 const config = require('../config');
-const { isSameWhatsAppUser } = require('../utils/jid');
+const crypto = require('crypto');
+const { isSameWhatsAppUser, normalizeUserJid } = require('../utils/jid');
 const { reconnectWhatsApp } = require('../whatsapp');
 const { formatPanel } = require('../utils/panel');
 const { deleteCompletedTorrents } = require('../clients/qbittorrentClient');
@@ -7,37 +8,49 @@ const { deleteCompletedTorrents } = require('../clients/qbittorrentClient');
 let adminVerified = new Set();
 
 function isAdminUser(userJid) {
-  const userClean = (userJid || '').replace(/\D/g, '');
+  const normalizedJid = normalizeUserJid(userJid);
 
-  if (adminVerified.has(userClean)) {
-    return true;
-  }
-
-  const ownerNumber = config.whatsapp.owner;
-  if (!ownerNumber) {
+  if (!normalizedJid) {
     return false;
   }
 
-  const ownerClean = ownerNumber.replace(/\D/g, '');
+  if (adminVerified.has(normalizedJid)) {
+    return true;
+  }
 
-  const exactMatch = ownerClean === userClean;
-  const suffixMatch = ownerClean === userClean.slice(-10) || userClean === ownerClean.slice(-10);
-  const lidMatch = userClean.endsWith(ownerClean) || userClean.endsWith(ownerClean.slice(-10));
-
-  const result = exactMatch || suffixMatch || lidMatch;
-  return result;
+  return isOwnerUser(normalizedJid);
 }
 
 function verifyAdmin(code) {
-  return code === '0420';
+  const expected = String(config.admin.registerCode || '');
+  const provided = String(code || '');
+  if (!expected || expected === 'CHANGEME_STRONG_CODE' || !provided) {
+    return false;
+  }
+
+  const expectedBuffer = Buffer.from(expected);
+  const providedBuffer = Buffer.from(provided);
+  return expectedBuffer.length === providedBuffer.length && crypto.timingSafeEqual(expectedBuffer, providedBuffer);
+}
+
+function isAdminRegistrationConfigured() {
+  const code = String(config.admin.registerCode || '');
+  return !!code && code !== 'CHANGEME_STRONG_CODE';
+}
+
+function isOwnerUser(userJid) {
+  return !!config.whatsapp.owner && isSameWhatsAppUser(config.whatsapp.owner, userJid);
 }
 
 function markAdminVerified(userJid) {
-  const userClean = (userJid || '').replace(/\D/g, '');
-  if (userClean) {
-    adminVerified.add(userClean);
-    console.log(`[Admin] User ${userClean} marked as verified admin`);
+  const normalizedJid = normalizeUserJid(userJid);
+  if (!normalizedJid || !isOwnerUser(normalizedJid)) {
+    return false;
   }
+
+  adminVerified.add(normalizedJid);
+  console.log('[Admin] Owner session verified');
+  return true;
 }
 
 function formatNoPermission() {
@@ -128,6 +141,9 @@ module.exports = {
   formatNoPermission,
   handleReconnect,
   handleRestart,
+  isAdminRegistrationConfigured,
   isAdminUser,
+  isOwnerUser,
   markAdminVerified,
+  verifyAdmin,
 };

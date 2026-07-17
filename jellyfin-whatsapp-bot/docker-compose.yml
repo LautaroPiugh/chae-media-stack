@@ -7,13 +7,12 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "3555:3555"
+      - "127.0.0.1:3555:3555"
     env_file:
       - .env
     volumes:
       - ./auth:/app/auth
       - /mnt/media:/mnt/media:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - NODE_ENV=production
     networks:

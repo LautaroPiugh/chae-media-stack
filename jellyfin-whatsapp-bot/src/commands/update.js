@@ -5,6 +5,7 @@ const { searchLocal } = require('../utils/librarySearch');
 const { formatPendingView, formatErrorPanel, formatInfoPanel } = require('../utils/formatMessage');
 const { rememberMediaRequest, notifyAdminQueuedDownload } = require('../utils/requestNotifications');
 const { formatPanel } = require('../utils/panel');
+const { isAdminUser, formatNoPermission } = require('./admin');
 
 function getCurrentMovieQuality(item) {
   return item.raw?.movieFile?.quality?.quality?.name || item.raw?.movieFile?.quality?.name || 'desconocida';
@@ -81,6 +82,10 @@ function formatMovieUpdateOptions(item, options) {
 }
 
 async function handleUpdateSearch(text, userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
   const query = text.replace(/^\/actualizar( peli| serie)?\s*/i, '').trim();
   const lower = text.toLowerCase();
 
@@ -123,6 +128,10 @@ async function handleUpdateSearch(text, userJid) {
 }
 
 async function handleUpdateSelect(text, userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
   const pending = getPending(userJid);
   if (!pending || !['update_search', 'update_quality_select'].includes(pending.mode)) {
     return formatErrorPanel('Actualizar búsqueda', ['- No tenés ninguna actualización pendiente']);
@@ -137,6 +146,10 @@ async function handleUpdateSelect(text, userJid) {
     const item = pending.item;
     const option = pending.options[index];
     deletePending(userJid);
+
+    if (!isAdminUser(userJid)) {
+      return formatNoPermission();
+    }
 
     await setMovieQualityProfile(item.raw.id, option.qualityProfileId);
     await searchExistingMovie(item.raw.id);
@@ -180,6 +193,10 @@ async function handleUpdateSelect(text, userJid) {
 
   deletePending(userJid);
 
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
   await searchExistingSeries(item.raw.id);
   rememberMediaRequest({ mediaType: 'series', mediaId: item.raw.id, requesterJid: userJid, title: item.title, year: item.year });
   await notifyAdminQueuedDownload({ mediaType: 'series', title: item.title, year: item.year, requesterJid: userJid, action: 'actualizada en Sonarr' });
@@ -187,6 +204,10 @@ async function handleUpdateSelect(text, userJid) {
 }
 
 async function handleActualizarMass(userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
   const [movies, series] = await Promise.all([
     searchAllMissingMovies().catch(() => ({ triggered: 0 })),
     searchAllMissingSeries().catch(() => ({ triggered: 0 })),

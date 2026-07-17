@@ -1,85 +1,103 @@
-const { execSync } = require('child_process');
+const {
+  addWhitelistRule,
+  getStatus,
+  isConfigured,
+  setProtection,
+} = require('../clients/adguardClient');
 const { formatPanel } = require('../utils/panel');
+const { isAdminUser, formatNoPermission } = require('./admin');
 
-function handleAdguardWhitelist(text) {
-  const domain = text.replace(/^\/agu-whitelist\s*/i, '').trim();
+function isValidDomain(domain) {
+  if (!domain || domain.length > 253) {
+    return false;
+  }
+
+  const labels = domain.split('.');
+  return labels.length >= 2 && labels.every((label) => (
+    label.length >= 1
+    && label.length <= 63
+    && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(label)
+  ));
+}
+
+async function handleAdguardWhitelist(text, userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+  if (!isConfigured()) {
+    return formatPanel('AdGuard Whitelist', [{ lines: ['AdGuard API no esta configurada'] }]);
+  }
+
+  const domain = text.replace(/^\/agu-whitelist\s*/i, '').trim().toLowerCase();
   if (!domain) {
     return formatPanel('AdGuard Whitelist', [
       { lines: ['Falta el dominio', '', 'Uso: /agu-whitelist <dominio>', 'Ej: /agu-whitelist ejemplo.com'] },
     ]);
   }
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(domain)) {
+  if (!isValidDomain(domain)) {
     return formatPanel('AdGuard Whitelist', [{ lines: ['Dominio invalido'] }]);
   }
 
   const rule = `@@||${domain}^`;
 
   try {
-    try {
-      execSync(
-        `docker exec chae-adguard sh -c "grep -qF '${rule}' /opt/adguardhome/conf/AdGuardHome.yaml"`,
-        { timeout: 5000, stdio: 'pipe' }
-      );
+    const added = await addWhitelistRule(rule);
+    if (!added) {
       return formatPanel('AdGuard Whitelist', [{ lines: [`${domain} ya esta en la whitelist`] }]);
-    } catch (_) {}
-
-    let isEmpty = false;
-    try {
-      execSync(
-        `docker exec chae-adguard sh -c "grep -q 'user_rules: \\[\\]' /opt/adguardhome/conf/AdGuardHome.yaml"`,
-        { timeout: 5000, stdio: 'pipe' }
-      );
-      isEmpty = true;
-    } catch (_) {}
-
-    if (isEmpty) {
-      execSync(
-        `docker exec chae-adguard sh -c "sed -i 's/user_rules: \\[\\]/user_rules:\\n  - ${rule}/' /opt/adguardhome/conf/AdGuardHome.yaml"`,
-        { timeout: 10000, stdio: 'pipe' }
-      );
-    } else {
-      execSync(
-        `docker exec chae-adguard sh -c "sed -i '/^user_rules:/a\\\\  - ${rule}' /opt/adguardhome/conf/AdGuardHome.yaml"`,
-        { timeout: 10000, stdio: 'pipe' }
-      );
     }
-
-    execSync('docker restart chae-adguard', { timeout: 15000, stdio: 'pipe' });
-
     return formatPanel('AdGuard Whitelist', [{ lines: [`${domain} agregado a la whitelist`] }]);
-  } catch (e) {
-    return formatPanel('AdGuard Whitelist', [{ lines: [`Error: ${e.message}`] }]);
+  } catch {
+    return formatPanel('AdGuard Whitelist', [{ lines: ['No se pudo actualizar la whitelist'] }]);
   }
 }
 
-function handleAdguardOff() {
+async function handleAdguardOff(userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+  if (!isConfigured()) {
+    return formatPanel('AdGuard', [{ lines: ['AdGuard API no esta configurada'] }]);
+  }
+
   try {
-    execSync('docker stop chae-adguard', { timeout: 10000, stdio: 'pipe' });
-    return formatPanel('AdGuard', [{ lines: ['AdGuard apagado'] }]);
-  } catch (e) {
-    return formatPanel('AdGuard', [{ lines: [`Error: ${e.message}`] }]);
+    await setProtection(false);
+    return formatPanel('AdGuard', [{ lines: ['Proteccion desactivada; el servicio DNS sigue activo'] }]);
+  } catch {
+    return formatPanel('AdGuard', [{ lines: ['No se pudo desactivar la proteccion'] }]);
   }
 }
 
-function handleAdguardOn() {
+async function handleAdguardOn(userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+  if (!isConfigured()) {
+    return formatPanel('AdGuard', [{ lines: ['AdGuard API no esta configurada'] }]);
+  }
+
   try {
-    execSync('docker start chae-adguard', { timeout: 10000, stdio: 'pipe' });
-    return formatPanel('AdGuard', [{ lines: ['AdGuard encendido'] }]);
-  } catch (e) {
-    return formatPanel('AdGuard', [{ lines: [`Error: ${e.message}`] }]);
+    await setProtection(true);
+    return formatPanel('AdGuard', [{ lines: ['Proteccion activada'] }]);
+  } catch {
+    return formatPanel('AdGuard', [{ lines: ['No se pudo activar la proteccion'] }]);
   }
 }
 
-function handleAdguardStatus() {
+async function handleAdguardStatus(userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+  if (!isConfigured()) {
+    return formatPanel('AdGuard', [{ lines: ['AdGuard API no esta configurada'] }]);
+  }
+
   try {
-    const result = execSync(
-      "docker ps --format '{{.Names}}' -f name=chae-adguard",
-      { timeout: 5000, stdio: 'pipe' }
-    ).toString().trim();
-    const status = result.includes('chae-adguard') ? 'ENCENDIDO' : 'APAGADO';
-    return formatPanel('AdGuard', [{ lines: [`AdGuard: ${status}`] }]);
-  } catch (e) {
-    return formatPanel('AdGuard', [{ lines: ['AdGuard: APAGADO'] }]);
+    const status = await getStatus();
+    const service = status?.running ? 'activo' : 'no disponible';
+    const protection = status?.protection_enabled ? 'activada' : 'desactivada';
+    return formatPanel('AdGuard', [{ lines: [`- Servicio DNS: ${service}`, `- Proteccion: ${protection}`] }]);
+  } catch {
+    return formatPanel('AdGuard', [{ lines: ['No se pudo consultar AdGuard'] }]);
   }
 }
 

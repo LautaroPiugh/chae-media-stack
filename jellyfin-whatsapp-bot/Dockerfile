@@ -3,13 +3,12 @@ FROM node:20-alpine
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
-RUN apk add --no-cache docker-cli
 
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-RUN pnpm install --frozen-lockfile || pnpm install
+RUN pnpm install --prod --frozen-lockfile
 
-COPY . .
+COPY src/ ./src/
 
 EXPOSE 3555
 

@@ -5,25 +5,32 @@ const { router: radarrWebhook } = require('./handlers/radarrWebhook');
 const { router: sonarrWebhook } = require('./handlers/sonarrWebhook');
 const { processCommand } = require('./commands');
 const { startAlerts } = require('./alerts');
+const { isValidToken } = require('./utils/httpAuth');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '64kb' }));
+
+function requireBotAdminToken(req, res, next) {
+  if (!isValidToken(config.admin.botToken, req.get('x-bot-admin-token'))) {
+    res.status(401).json({ ok: false, error: 'unauthorized' });
+    return;
+  }
+
+  next();
+}
 
 app.get('/health', (req, res) => {
-  res.json({
-    ok: true,
-    service: config.serviceName,
-  });
+  res.json({ ok: true });
 });
 
-app.get('/status', (req, res) => {
+app.get('/status', requireBotAdminToken, (req, res) => {
   res.json({
     ok: true,
     whatsappConnected: isWhatsAppConnected(),
   });
 });
 
-app.get('/test-whatsapp', async (req, res) => {
+app.get('/test-whatsapp', requireBotAdminToken, async (req, res) => {
   const sent = await sendWhatsAppMessage('🧪 Test message from Jellyfin WhatsApp Bot');
   res.json({ ok: sent });
 });
@@ -32,7 +39,7 @@ app.post('/notify/system-update', async (req, res) => {
   const expectedToken = config.whatsapp.updateNotifyToken;
   const providedToken = req.get('x-update-token') || '';
 
-  if (!expectedToken || providedToken !== expectedToken) {
+  if (!isValidToken(expectedToken, providedToken)) {
     res.status(401).json({ ok: false, error: 'unauthorized' });
     return;
   }
@@ -72,4 +79,8 @@ async function init() {
   });
 }
 
-init();
+if (require.main === module) {
+  init();
+}
+
+module.exports = { app, init };

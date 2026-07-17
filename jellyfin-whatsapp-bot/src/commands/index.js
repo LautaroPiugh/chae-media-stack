@@ -16,7 +16,17 @@ const { handleDeleteSearch, handleDeleteSelect, handleDeleteConfirm } = require(
 const { handleUpdateSearch, handleUpdateSelect, handleActualizarMass } = require('./update');
 const { handleRefreshSearch, handleRefreshSelect } = require('./refresh');
 const { handleLatest } = require('./latest');
-const { handleReconnect, handleRestart, handleCleanTorrents, isAdminUser, formatNoPermission, markAdminVerified } = require('./admin');
+const {
+  handleReconnect,
+  handleRestart,
+  handleCleanTorrents,
+  isAdminRegistrationConfigured,
+  isAdminUser,
+  isOwnerUser,
+  formatNoPermission,
+  markAdminVerified,
+  verifyAdmin,
+} = require('./admin');
 const { handleSubs } = require('./subs');
 const { handleTraducir } = require('./traducir');
 const { handleAdguardWhitelist, handleAdguardOff, handleAdguardOn, handleAdguardStatus } = require('./adguard');
@@ -121,8 +131,20 @@ function processCommand(text, userJid) {
     return handleCleanTorrents(userJid);
   }
 
-  if (lower === '/registraradmin' || lower === '/verifyadmin') {
-    markAdminVerified(userJid);
+  if (lower === '/registraradmin' || lower.startsWith('/registraradmin ') || lower === '/verifyadmin' || lower.startsWith('/verifyadmin ')) {
+    if (!isOwnerUser(userJid)) {
+      return formatNoPermission();
+    }
+
+    if (!isAdminRegistrationConfigured()) {
+      return formatErrorPanel('Registro de admin', ['- El registro de admin no está configurado']);
+    }
+
+    const code = text.trim().split(/\s+/).slice(1).join(' ');
+    if (!verifyAdmin(code) || !markAdminVerified(userJid)) {
+      return formatErrorPanel('Registro de admin', ['- Código inválido']);
+    }
+
     return formatPanel('Admin verificado', [
       {
         lines: [
@@ -156,6 +178,7 @@ function processCommand(text, userJid) {
   }
 
   if (lower.startsWith('/actualizar')) {
+    if (!isAdmin) return formatNoPermission();
     return handleUpdateSearch(text, userJid);
   }
 
@@ -180,7 +203,8 @@ function processCommand(text, userJid) {
   }
 
   if (lower.startsWith('/traducir')) {
-    return handleTraducir(text);
+    if (!isAdmin) return formatNoPermission();
+    return handleTraducir(text, userJid);
   }
 
   if (lower === '/peli' || lower === '/pelicula' || lower.startsWith('/peli ') || lower.startsWith('/pelicula ')) {
@@ -244,6 +268,7 @@ function processCommand(text, userJid) {
   }
 
   if (lower.startsWith('actualizar ')) {
+    if (!isAdmin) return formatNoPermission();
     return handleUpdateSelect(text, userJid);
   }
 
@@ -273,10 +298,12 @@ function processCommand(text, userJid) {
   if (/^\d+$/.test(lower) && userJid) {
     const pending = getPending(userJid);
     if (pending?.mode === 'update_quality_select') {
+      if (!isAdmin) return formatNoPermission();
       return handleUpdateSelect(`actualizar ${lower}`, userJid);
     }
 
     if (pending?.mode === 'trending_select') {
+      if (!isAdmin) return formatNoPermission();
       return handleTrendingSelect(userJid, parseInt(lower, 10));
     }
 
@@ -288,24 +315,24 @@ function processCommand(text, userJid) {
     return handleSelection(`${prefix} ${lower}`, userJid, pending.type);
   }
 
-  if (lower.startsWith('/agu-whitelist ')) {
+  if (lower === '/agu-whitelist' || lower.startsWith('/agu-whitelist ')) {
     if (!isAdmin) return formatNoPermission();
-    return handleAdguardWhitelist(text);
+    return handleAdguardWhitelist(text, userJid);
   }
 
   if (lower === '/agu-off') {
     if (!isAdmin) return formatNoPermission();
-    return handleAdguardOff();
+    return handleAdguardOff(userJid);
   }
 
   if (lower === '/agu-on') {
     if (!isAdmin) return formatNoPermission();
-    return handleAdguardOn();
+    return handleAdguardOn(userJid);
   }
 
   if (lower === '/agu-status') {
     if (!isAdmin) return formatNoPermission();
-    return handleAdguardStatus();
+    return handleAdguardStatus(userJid);
   }
 
   if (lower === '/descargar-tendencias' || lower === '/tendencias') {

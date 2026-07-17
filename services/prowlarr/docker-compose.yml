@@ -10,7 +10,8 @@ services:
     volumes:
       - ./config:/config
     ports:
-      - "9696:9696"
+      - "127.0.0.1:9696:9696"
+      - "192.168.1.100:9696:9696"
     networks:
       - qbittorrent_default
       - prowlarr_default

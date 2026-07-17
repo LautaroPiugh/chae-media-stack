@@ -1,4 +1,4 @@
-const { getQueue: getRadarrQueue, cleanupUnavailableQueueItems } = require('../clients/radarrClient');
+const { getQueue: getRadarrQueue } = require('../clients/radarrClient');
 const { getQueue: getSonarrQueue } = require('../clients/sonarrClient');
 const { getActiveTorrents, isConfigured: isQbitConfigured } = require('../clients/qbittorrentClient');
 const { remember } = require('../utils/cache');
@@ -147,8 +147,6 @@ function formatTorrentLine(torrent) {
 
 async function handleQueue() {
   return remember('command:queue', 30000, async () => {
-    await cleanupUnavailableQueueItems().catch(() => 0);
-
     const [radarrQueue, sonarrQueue, torrents] = await Promise.all([
       getRadarrQueue().catch(() => []),
       getSonarrQueue().catch(() => []),

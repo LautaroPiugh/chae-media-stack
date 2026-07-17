@@ -2,8 +2,13 @@ const { listSeries, refreshExistingSeries, rescanExistingSeries } = require('../
 const { setPending, getPending, deletePending } = require('../store/pendingSelections');
 const { searchLocal } = require('../utils/librarySearch');
 const { formatPendingView, formatErrorPanel, formatInfoPanel } = require('../utils/formatMessage');
+const { isAdminUser, formatNoPermission } = require('./admin');
 
 async function handleRefreshSearch(text, userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
   const query = text.replace(/^\/(?:refrescar|refresh|rescaneo|rescan)( serie)?\s*/i, '').trim();
 
   if (!query) {
@@ -33,6 +38,10 @@ async function handleRefreshSearch(text, userJid) {
 }
 
 async function handleRefreshSelect(text, userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
   const pending = getPending(userJid);
   if (!pending || pending.mode !== 'refresh_search') {
     return formatErrorPanel('Refresh y rescan', ['- No tenés ningún refresh pendiente']);
@@ -45,6 +54,10 @@ async function handleRefreshSelect(text, userJid) {
 
   const item = pending.results[index];
   deletePending(userJid);
+
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
 
   await refreshExistingSeries(item.raw.id);
   await rescanExistingSeries(item.raw.id);

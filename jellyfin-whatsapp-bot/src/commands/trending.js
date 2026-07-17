@@ -6,6 +6,7 @@ const { rememberMediaRequest, notifyAdminQueuedDownload } = require('../utils/re
 const { formatPanel } = require('../utils/panel');
 const { formatInfoPanel, formatErrorPanel } = require('../utils/formatMessage');
 const { setPending } = require('../store/pendingSelections');
+const { isAdminUser, formatNoPermission } = require('./admin');
 
 async function fetchTrending() {
   const trending = await getTrending('week');
@@ -49,6 +50,10 @@ async function fetchTrending() {
 }
 
 async function handleTrending(userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
   try {
     const movies = await fetchTrending();
 
@@ -80,6 +85,10 @@ async function handleTrending(userJid) {
 }
 
 async function handleTrendingSelect(userJid, count) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
   const pending = getPending(userJid);
   if (!pending || pending.mode !== 'trending_select') {
     return null;
@@ -94,6 +103,10 @@ async function handleTrendingSelect(userJid, count) {
   }
 
   deletePending(userJid);
+
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
 
   const added = [];
   const errors = [];

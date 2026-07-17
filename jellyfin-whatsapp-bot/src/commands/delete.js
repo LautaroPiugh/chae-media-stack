@@ -4,8 +4,13 @@ const { deleteTorrentsByName } = require('../clients/qbittorrentClient');
 const { setPending, getPending, deletePending } = require('../store/pendingSelections');
 const { searchLocal } = require('../utils/librarySearch');
 const { formatPendingView, formatErrorPanel, formatInfoPanel } = require('../utils/formatMessage');
+const { isAdminUser, formatNoPermission } = require('./admin');
 
 async function handleDeleteSearch(text, userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
   const query = text.replace(/^\/eliminar( peli| serie)?\s*/i, '').trim();
   const lower = text.toLowerCase();
 
@@ -47,6 +52,10 @@ async function handleDeleteSearch(text, userJid) {
 }
 
 function handleDeleteSelect(text, userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
   const pending = getPending(userJid);
   if (!pending || pending.mode !== 'delete_search') {
     return formatErrorPanel('Eliminar de biblioteca', ['- No tenés ninguna eliminación pendiente']);
@@ -75,6 +84,10 @@ function handleDeleteSelect(text, userJid) {
 }
 
 async function handleDeleteConfirm(userJid) {
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
+
   const pending = getPending(userJid);
   if (!pending || pending.mode !== 'delete_confirm' || !pending.item) {
     return formatErrorPanel('Confirmación de borrado', ['- No tenés ninguna eliminación pendiente para confirmar']);
@@ -82,6 +95,10 @@ async function handleDeleteConfirm(userJid) {
 
   const item = pending.item;
   deletePending(userJid);
+
+  if (!isAdminUser(userJid)) {
+    return formatNoPermission();
+  }
 
   if (item.kind === 'movie') {
     await deleteMovie(item.raw.id);

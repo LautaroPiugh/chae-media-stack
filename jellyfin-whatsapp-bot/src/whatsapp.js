@@ -2,7 +2,7 @@ const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion 
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const config = require('./config');
-const { numberToJid } = require('./utils/jid');
+const { getAuthorizedSenderJid, numberToJid } = require('./utils/jid');
 const { authDir, ensureAuthDir } = require('./utils/auth');
 
 let sock = null;
@@ -15,6 +15,10 @@ const logger = pino({ level: 'info' });
 
 function isGroupMessage(jid) {
   return jid && jid.includes('@g.us');
+}
+
+function isLiveMessageBatch(type, requestId) {
+  return type === 'notify' && !requestId;
 }
 
 async function startWhatsApp() {
@@ -69,27 +73,36 @@ async function startWhatsApp() {
     console.log('\n');
   });
 
-  sock.ev.on('messages.upsert', async ({ messages }) => {
+  sock.ev.on('messages.upsert', async ({ messages, type, requestId }) => {
+    if (!isLiveMessageBatch(type, requestId)) {
+      console.log('[WhatsApp] Ignored: non-live message batch');
+      return;
+    }
+
     for (const msg of messages) {
       if (!msg.message) continue;
       if (msg.key.fromMe) continue;
 
       const jid = msg.key.remoteJid;
 
-      console.log(`[WhatsApp] Message from JID: ${jid}`);
-
       if (isGroupMessage(jid)) {
         console.log('[WhatsApp] Ignored: group message');
+        continue;
+      }
+
+      const senderJid = getAuthorizedSenderJid(msg.key, config.whatsapp.owner);
+      if (!senderJid) {
+        console.warn('[WhatsApp] Ignored: unauthorized sender');
         continue;
       }
 
       const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
       if (!text.trim()) continue;
 
-      console.log(`[WhatsApp] Processing: "${text}"`);
+      console.log('[WhatsApp] Processing authorized command');
 
       if (messageHandler) {
-        await messageHandler(text.trim(), jid);
+        await messageHandler(text.trim(), senderJid);
       }
     }
   });
@@ -128,8 +141,6 @@ async function sendWhatsAppMessage(text, jid = null) {
 
   const targetJid = jid || numberToJid(config.whatsapp.owner);
 
-  console.log(`[WhatsApp] Sending message to JID: ${targetJid}`);
-
   try {
     await sock.sendMessage(targetJid, { text: String(text) });
     console.log('[WhatsApp] Message sent successfully');
@@ -152,6 +163,7 @@ module.exports = {
   startWhatsApp,
   sendWhatsAppMessage,
   isWhatsAppConnected,
+  isLiveMessageBatch,
   onMessage,
   reconnectWhatsApp,
 };

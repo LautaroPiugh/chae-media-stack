@@ -7,30 +7,71 @@ LOG_DIR="$ROOT/logs"
 LOG_FILE="$LOG_DIR/media-stack-update.log"
 STATE_FILE="$HOME/.cache/media-stack-update.state"
 STACK_DASHBOARD_SCRIPT="$ROOT/scripts/generate-stack-dashboard-data.sh"
-DRY_RUN="${DRY_RUN:-0}"
+HEALTH_CHECK_SCRIPT="$ROOT/scripts/health-check.sh"
+MEDIA_STATUS_SCRIPT="$ROOT/scripts/media-status.sh"
+BACKUP_DIR="${BACKUP_DIR:-/mnt/media2/backups/stack}"
+BACKUP_MAX_AGE_HOURS="${BACKUP_MAX_AGE_HOURS:-30}"
+DRY_RUN="${DRY_RUN:-1}"
+CONFIRM_UPDATE="${CONFIRM_UPDATE:-}"
+UPDATE_PORTAINER="${UPDATE_PORTAINER:-0}"
+PORTAINER_IMAGE="${PORTAINER_IMAGE:-portainer/portainer-ce:2.39.5}"
+PORTAINER_BACKUP_FILE="${PORTAINER_BACKUP_FILE:-}"
 WHATSAPP_NOTIFY_URL="${WHATSAPP_NOTIFY_URL:-http://127.0.0.1:3555/notify/system-update}"
 WHATSAPP_NOTIFY_TOKEN="${WHATSAPP_NOTIFY_TOKEN:-CHANGEME}"
-MODE="${1:-all}"
+MODE="${1:-help}"
+TARGET="${2:-}"
 
-COMPOSE_DIRS=(
-  "$ROOT/services/postgres"
-  "$ROOT/services/uptime-kuma"
-  "$ROOT/services/qbittorrent"
-  "$ROOT/services/prowlarr"
-  "$ROOT/services/sonarr"
-  "$ROOT/services/radarr"
-  "$ROOT/services/bazarr"
-  "$ROOT/services/jellyfin"
-  "$ROOT/services/flaresolverr"
-  "$ROOT/services/subgen"
-  "$ROOT/services/jellyseerr"
-  "$ROOT/jellyfin-whatsapp-bot"
-  "$ROOT/jellyfin-whatsapp-notifier"
-  "$ROOT/nginx-proxy-manager"
-  "$ROOT/services/tdarr"
+declare -Ar UPDATE_DIRS=(
+  [prowlarr]="$ROOT/services/prowlarr"
+  [sonarr]="$ROOT/services/sonarr"
+  [radarr]="$ROOT/services/radarr"
+  [bazarr]="$ROOT/services/bazarr"
+  [jellyfin]="$ROOT/services/jellyfin"
+  [flaresolverr]="$ROOT/services/flaresolverr"
+  [subgen]="$ROOT/services/subgen"
+  [jellyseerr]="$ROOT/services/jellyseerr"
+  [tdarr]="$ROOT/services/tdarr"
 )
 
-status="failed"
+declare -Ar UPDATE_SERVICES=(
+  [prowlarr]='prowlarr'
+  [sonarr]='sonarr'
+  [radarr]='radarr'
+  [bazarr]='bazarr'
+  [jellyfin]='jellyfin'
+  [flaresolverr]='flaresolverr'
+  [subgen]='subgenai'
+  [jellyseerr]='jellyseerr'
+  [tdarr]='tdarr tdarr-node'
+)
+
+declare -Ar BACKUP_KEYS=(
+  [prowlarr]='prowlarr'
+  [sonarr]='sonarr'
+  [radarr]='radarr'
+  [bazarr]='bazarr'
+  [jellyfin]='jellyfin'
+  [flaresolverr]=''
+  [subgen]=''
+  [jellyseerr]='jellyseerr'
+  [tdarr]='tdarr'
+)
+
+DENYLIST=(
+  postgres
+  portainer
+  watchtower
+  cloudflared
+  jellyfin-whatsapp-bot
+  adguard
+  qbittorrent
+  homepage
+  uptime-kuma
+  maintainerr
+  nginx-proxy-manager
+)
+
+status='failed'
 summary=''
 
 timestamp() {
@@ -41,176 +82,473 @@ log() {
   printf '[%s] %s\n' "$(timestamp)" "$*"
 }
 
+die() {
+  log "ERROR: $*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Uso seguro:
+  update-media-stack.sh list
+  DRY_RUN=1 update-media-stack.sh service <servicio>
+  DRY_RUN=0 CONFIRM_UPDATE=<servicio> update-media-stack.sh service <servicio>
+
+Vista previa de toda la allowlist (nunca actualiza en lote):
+  DRY_RUN=1 update-media-stack.sh media
+
+Portainer requiere gates y backup adicionales:
+  DRY_RUN=1 update-media-stack.sh portainer
+  DRY_RUN=0 UPDATE_PORTAINER=1 CONFIRM_UPDATE=portainer \
+    PORTAINER_BACKUP_FILE=/ruta/portainer-data.tar.gz \
+    update-media-stack.sh portainer
+
+DRY_RUN vale 1 por defecto. Los modos all/system no ejecutan actualizaciones.
+EOF
+}
+
 write_state() {
   mkdir -p "$(dirname "$STATE_FILE")"
   {
     printf 'last_run=%s\n' "$(date +%s)"
     printf 'last_status=%s\n' "$status"
     printf 'last_mode=%s\n' "$MODE"
+    printf 'last_target=%s\n' "$TARGET"
   } > "$STATE_FILE"
 }
 
-trap write_state EXIT
+setup_logging() {
+  mkdir -p "$LOG_DIR"
+  exec > >(tee -a "$LOG_FILE") 2>&1
+  trap write_state EXIT
+}
 
-mkdir -p "$LOG_DIR"
-exec > >(tee -a "$LOG_FILE") 2>&1
+print_cmd() {
+  printf '[%s] +' "$(timestamp)"
+  printf ' %q' "$@"
+  printf '\n'
+}
 
 run_cmd() {
-  log "+ $*"
-  if [[ "$DRY_RUN" == "1" ]]; then
+  print_cmd "$@"
+  if [[ "$DRY_RUN" == '1' ]]; then
     return 0
   fi
   "$@"
 }
 
-notify_whatsapp() {
-  local message="$1"
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "falta el comando requerido: $1"
+}
 
-  if [[ "$DRY_RUN" == "1" ]]; then
-    log 'Skipping WhatsApp notification in DRY_RUN mode'
+is_denied() {
+  local requested="$1"
+  local denied
+
+  for denied in "${DENYLIST[@]}"; do
+    [[ "$requested" == "$denied" ]] && return 0
+  done
+  return 1
+}
+
+list_policy() {
+  printf 'Allowlist actualizable manualmente:\n'
+  printf '  %s\n' "${!UPDATE_DIRS[@]}" | sort
+  printf '\nDenylist de seguridad:\n'
+  printf '  %s\n' "${DENYLIST[@]}"
+  printf '\nWatchtower permanece deshabilitado y este script no lo inicia ni recrea.\n'
+}
+
+validate_settings() {
+  [[ "$DRY_RUN" == '0' || "$DRY_RUN" == '1' ]] || die 'DRY_RUN debe ser 0 o 1'
+  [[ "$UPDATE_PORTAINER" == '0' || "$UPDATE_PORTAINER" == '1' ]] \
+    || die 'UPDATE_PORTAINER debe ser 0 o 1'
+  [[ "$BACKUP_MAX_AGE_HOURS" =~ ^[0-9]+$ && "$BACKUP_MAX_AGE_HOURS" -gt 0 ]] \
+    || die 'BACKUP_MAX_AGE_HOURS debe ser un entero positivo'
+}
+
+require_confirmation() {
+  local expected="$1"
+
+  [[ "$DRY_RUN" == '1' ]] && return 0
+  [[ "$CONFIRM_UPDATE" == "$expected" ]] \
+    || die "confirmacion requerida: CONFIRM_UPDATE=$expected"
+}
+
+assert_watchtower_stopped() {
+  local running
+
+  running="$(docker inspect --format '{{.State.Running}}' watchtower 2>/dev/null || true)"
+  [[ "$running" != 'true' ]] || die 'Watchtower esta activo; detengalo antes de actualizar'
+}
+
+check_media_mounts() {
+  local media_status
+
+  [[ -x "$MEDIA_STATUS_SCRIPT" ]] || die "falta $MEDIA_STATUS_SCRIPT"
+  media_status="$($MEDIA_STATUS_SCRIPT 2>/dev/null || true)"
+  [[ "$media_status" == 'healthy' ]] \
+    || die 'las monturas media estan missing; no se ejecutaran actualizaciones'
+  log 'Monturas media: healthy'
+}
+
+run_global_health_check() {
+  [[ -x "$HEALTH_CHECK_SCRIPT" ]] || die "falta $HEALTH_CHECK_SCRIPT"
+  "$HEALTH_CHECK_SCRIPT"
+}
+
+validate_backup_file() {
+  local file="$1"
+  local label="$2"
+  local now
+  local modified
+  local max_age_seconds
+
+  [[ -n "$file" && -f "$file" && -s "$file" ]] \
+    || die "no hay backup valido para $label: ${file:-no configurado}"
+
+  now="$(date +%s)"
+  modified="$(stat -c %Y "$file")"
+  max_age_seconds=$((BACKUP_MAX_AGE_HOURS * 3600))
+  (( now - modified <= max_age_seconds )) \
+    || die "el backup de $label supera ${BACKUP_MAX_AGE_HOURS}h: $file"
+
+  case "$file" in
+    *.tar.gz|*.tgz)
+      tar -tzf "$file" >/dev/null || die "backup tar invalido para $label: $file"
+      ;;
+    *.sql.gz)
+      gzip -t "$file" || die "backup gzip invalido para $label: $file"
+      ;;
+  esac
+  log "Backup reciente validado para $label: $file"
+}
+
+check_recent_service_backup() {
+  local target="$1"
+  local backup_key="${BACKUP_KEYS[$target]-}"
+  local latest=''
+  local file
+
+  if [[ -z "$backup_key" ]]; then
+    log "Servicio sin estado respaldado por el stack: $target"
     return 0
   fi
 
-  if [[ -z "$WHATSAPP_NOTIFY_TOKEN" ]]; then
-    log 'Skipping WhatsApp notification: no token configured'
+  for file in "$BACKUP_DIR/configs/${backup_key}-"*.tar.gz; do
+    [[ -f "$file" ]] || continue
+    if [[ -z "$latest" || "$file" -nt "$latest" ]]; then
+      latest="$file"
+    fi
+  done
+  validate_backup_file "$latest" "$target"
+}
+
+assert_container_safe_for_update() {
+  local container_id="$1"
+  local service="$2"
+  local running
+  local socket_mount
+
+  running="$(docker inspect --format '{{.State.Running}}' "$container_id")"
+  [[ "$running" == 'true' ]] || die "el servicio no esta running: $service"
+
+  socket_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/run/docker.sock"}}yes{{end}}{{end}}' "$container_id")"
+  [[ "$socket_mount" != 'yes' ]] \
+    || die "servicio bloqueado por montar docker.sock: $service"
+}
+
+wait_for_compose_services() {
+  local compose_file="$1"
+  shift
+  local -a services=("$@")
+  local attempt
+  local service
+  local container_id
+  local running
+  local health
+  local ready
+
+  for attempt in $(seq 1 45); do
+    ready=1
+    for service in "${services[@]}"; do
+      container_id="$(docker compose -f "$compose_file" ps -q "$service")"
+      if [[ -z "$container_id" ]]; then
+        ready=0
+        break
+      fi
+      running="$(docker inspect --format '{{.State.Running}}' "$container_id")"
+      health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_id")"
+      if [[ "$running" != 'true' || "$health" == 'unhealthy' || "$health" == 'starting' ]]; then
+        ready=0
+        break
+      fi
+    done
+    [[ "$ready" -eq 1 ]] && return 0
+    sleep 2
+  done
+  return 1
+}
+
+rollback_compose_services() {
+  local compose_file="$1"
+  shift
+  local -a services=("$@")
+  local service
+
+  log 'Iniciando rollback del objetivo'
+  for service in "${services[@]}"; do
+    docker image tag "${OLD_IMAGE_IDS[$service]}" "${OLD_IMAGE_REFS[$service]}"
+  done
+  docker compose -f "$compose_file" up -d --no-deps --force-recreate "${services[@]}"
+  wait_for_compose_services "$compose_file" "${services[@]}"
+}
+
+restore_portainer() {
+  local rollback_name="$1"
+  local attempt
+
+  docker rm -f portainer >/dev/null 2>&1 || true
+  docker rename "$rollback_name" portainer
+  docker start portainer >/dev/null
+  for attempt in $(seq 1 30); do
+    if curl --insecure --fail --silent https://127.0.0.1:9443/api/system/status >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+update_allowed_service() {
+  local target="$1"
+  local dir
+  local compose_file
+  local service
+  local container_id
+  local -a services=()
+  declare -gA OLD_IMAGE_IDS=()
+  declare -gA OLD_IMAGE_REFS=()
+
+  [[ -n "$target" ]] || die 'falta el servicio objetivo'
+  if is_denied "$target"; then
+    die "servicio bloqueado por denylist: $target"
+  fi
+  [[ -n "${UPDATE_DIRS[$target]-}" ]] || die "servicio fuera de allowlist: $target"
+
+  dir="${UPDATE_DIRS[$target]}"
+  compose_file="$dir/docker-compose.yml"
+  read -r -a services <<< "${UPDATE_SERVICES[$target]}"
+
+  [[ -f "$compose_file" ]] || die "no existe el Compose de $target: $compose_file"
+  docker compose -f "$compose_file" config --quiet
+  check_media_mounts
+  assert_watchtower_stopped
+  check_recent_service_backup "$target"
+  run_global_health_check
+
+  for service in "${services[@]}"; do
+    container_id="$(docker compose -f "$compose_file" ps -q "$service")"
+    [[ -n "$container_id" ]] || die "Compose no administra un contenedor running para $service"
+    assert_container_safe_for_update "$container_id" "$service"
+    OLD_IMAGE_IDS["$service"]="$(docker inspect --format '{{.Image}}' "$container_id")"
+    OLD_IMAGE_REFS["$service"]="$(docker inspect --format '{{.Config.Image}}' "$container_id")"
+    [[ "${OLD_IMAGE_REFS[$service]}" != sha256:* ]] \
+      || die "no se puede preparar rollback de una referencia por digest: $service"
+  done
+
+  require_confirmation "$target"
+  if [[ "$DRY_RUN" == '1' ]]; then
+    run_cmd docker compose -f "$compose_file" pull "${services[@]}"
+    run_cmd docker compose -f "$compose_file" up -d --no-deps "${services[@]}"
+    status='dry-run'
+    return 0
+  fi
+
+  run_cmd docker compose -f "$compose_file" pull "${services[@]}"
+  if ! run_cmd docker compose -f "$compose_file" up -d --no-deps "${services[@]}"; then
+    rollback_compose_services "$compose_file" "${services[@]}" \
+      || die "fallo la actualizacion y tambien el rollback de $target"
+    die "fallo la actualizacion; $target fue restaurado"
+  fi
+
+  if ! wait_for_compose_services "$compose_file" "${services[@]}" \
+    || ! run_global_health_check; then
+    rollback_compose_services "$compose_file" "${services[@]}" \
+      || die "fallo el health-check y tambien el rollback de $target"
+    die "fallo el health-check; $target fue restaurado"
+  fi
+
+  status='ok'
+}
+
+update_portainer() {
+  local rollback_name="portainer-pre-update-$(date '+%Y%m%d-%H%M%S')"
+  local restart_policy
+  local ready=0
+  local attempt
+
+  [[ "$PORTAINER_IMAGE" != *:latest ]] || die 'PORTAINER_IMAGE no puede usar latest'
+  check_media_mounts
+  assert_watchtower_stopped
+  run_global_health_check
+
+  if [[ "$DRY_RUN" == '0' ]]; then
+    [[ "$UPDATE_PORTAINER" == '1' ]] || die 'Portainer requiere UPDATE_PORTAINER=1'
+    require_confirmation 'portainer'
+    validate_backup_file "$PORTAINER_BACKUP_FILE" 'portainer_data'
+  else
+    log 'DRY_RUN: una actualizacion real exigira UPDATE_PORTAINER=1, CONFIRM_UPDATE=portainer y PORTAINER_BACKUP_FILE'
+  fi
+
+  [[ "$(docker inspect --format '{{.State.Running}}' portainer 2>/dev/null || true)" == 'true' ]] \
+    || die 'Portainer no esta running'
+  [[ "$(docker port portainer 9443/tcp)" == '127.0.0.1:9443' ]] \
+    || die 'Portainer no tiene el bind seguro 127.0.0.1:9443'
+  [[ "$(docker inspect --format '{{range .Mounts}}{{if and (eq .Destination "/data") (eq .Name "portainer_data")}}yes{{end}}{{end}}' portainer)" == 'yes' ]] \
+    || die 'Portainer no usa el volumen esperado portainer_data'
+  [[ "$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/run/docker.sock"}}yes{{end}}{{end}}' portainer)" == 'yes' ]] \
+    || die 'Portainer no tiene el socket Docker esperado'
+
+  restart_policy="$(docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' portainer)"
+  if docker inspect "$rollback_name" >/dev/null 2>&1; then
+    die "ya existe el contenedor de rollback: $rollback_name"
+  fi
+  if [[ "$DRY_RUN" == '1' ]]; then
+    run_cmd docker pull "$PORTAINER_IMAGE"
+    run_cmd docker stop portainer
+    run_cmd docker rename portainer "$rollback_name"
+    run_cmd docker run -d --name portainer \
+      --restart "$restart_policy" \
+      --network bridge \
+      --publish 127.0.0.1:9443:9443 \
+      --volume /var/run/docker.sock:/var/run/docker.sock \
+      --volume portainer_data:/data \
+      "$PORTAINER_IMAGE"
+    status='dry-run'
+    return 0
+  fi
+
+  docker pull "$PORTAINER_IMAGE"
+  docker stop portainer
+  if ! docker rename portainer "$rollback_name"; then
+    docker start portainer >/dev/null || true
+    die 'no se pudo preparar el contenedor de rollback de Portainer'
+  fi
+  if ! docker run -d --name portainer \
+    --restart "$restart_policy" \
+    --network bridge \
+    --publish 127.0.0.1:9443:9443 \
+    --volume /var/run/docker.sock:/var/run/docker.sock \
+    --volume portainer_data:/data \
+    "$PORTAINER_IMAGE"; then
+    restore_portainer "$rollback_name" \
+      || die 'fallo la recreacion de Portainer y tambien el rollback'
+    die 'fallo la recreacion de Portainer; se restauro el contenedor anterior'
+  fi
+
+  for attempt in $(seq 1 30); do
+    if curl --insecure --fail --silent https://127.0.0.1:9443/api/system/status >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$ready" -ne 1 ]]; then
+    restore_portainer "$rollback_name" \
+      || die 'fallo el health-check de Portainer y tambien el rollback'
+    die 'Portainer no supero el health-check; se restauro el contenedor anterior'
+  fi
+
+  if [[ "$(docker port portainer 9443/tcp)" != '127.0.0.1:9443' ]] \
+    || ! run_global_health_check; then
+    restore_portainer "$rollback_name" \
+      || die 'fallo la validacion final de Portainer y tambien el rollback'
+    die 'Portainer no supero la validacion final; se restauro el contenedor anterior'
+  fi
+  status='ok'
+  log "Rollback conservado en el contenedor: $rollback_name"
+}
+
+refresh_dashboard_cache() {
+  [[ "$DRY_RUN" == '0' && "$status" == 'ok' ]] || return 0
+  if [[ -x "$STACK_DASHBOARD_SCRIPT" ]]; then
+    "$STACK_DASHBOARD_SCRIPT"
+  fi
+}
+
+notify_whatsapp() {
+  local message="$1"
+
+  [[ "$DRY_RUN" == '0' && "$status" == 'ok' ]] || return 0
+  if [[ -z "$WHATSAPP_NOTIFY_TOKEN" || "$WHATSAPP_NOTIFY_TOKEN" == 'CHANGEME' ]]; then
+    log 'Skipping WhatsApp notification: token no configurado'
     return 0
   fi
 
   curl -fsS -X POST "$WHATSAPP_NOTIFY_URL" \
     -H 'Content-Type: application/json' \
     -H "x-update-token: $WHATSAPP_NOTIFY_TOKEN" \
-    -d "$(printf '{\"message\":%s}' "$(printf '%s' "$message" | jq -Rs .)")" >/dev/null || \
-    log 'WhatsApp notification failed'
+    -d "$(printf '{\"message\":%s}' "$(printf '%s' "$message" | jq -Rs .)")" >/dev/null \
+    || log 'WhatsApp notification failed'
 }
 
-compose_has_running_services() {
-  local dir="$1"
-  docker compose -f "$dir/docker-compose.yml" ps --services --status running 2>/dev/null | grep -q '.'
-}
+preview_allowlist() {
+  local target
 
-compose_uses_build() {
-  local dir="$1"
-  grep -q '^[[:space:]]*build:' "$dir/docker-compose.yml"
-}
-
-update_compose_project() {
-  local dir="$1"
-  local name
-
-  name="$(basename "$dir")"
-  if [[ ! -f "$dir/docker-compose.yml" ]]; then
-    log "Skipping $name: docker-compose.yml not found"
-    return 0
-  fi
-
-  if ! compose_has_running_services "$dir"; then
-    log "Skipping $name: no running services in this compose project"
-    return 0
-  fi
-
-  log "Updating compose project: $name"
-  if compose_uses_build "$dir"; then
-    run_cmd docker compose -f "$dir/docker-compose.yml" build --pull
-    run_cmd docker compose -f "$dir/docker-compose.yml" up -d --force-recreate
-  else
-    run_cmd docker compose -f "$dir/docker-compose.yml" pull
-    run_cmd docker compose -f "$dir/docker-compose.yml" up -d --remove-orphans
-  fi
-}
-
-update_portainer() {
-  if ! docker ps --format '{{.Names}}' | grep -qx 'portainer'; then
-    log 'Skipping portainer: container not running'
-    return 0
-  fi
-
-  log 'Updating standalone container: portainer'
-  run_cmd docker pull portainer/portainer-ce:latest
-  run_cmd docker stop portainer
-  run_cmd docker rm portainer
-  run_cmd docker run -d --name portainer \
-    --restart unless-stopped \
-    --network bridge \
-    -p 9443:9443 \
-    -v /var/run/docker.sock:/var/run/docker.sock \
-    -v portainer_data:/data \
-    portainer/portainer-ce:latest
-}
-
-update_system_packages() {
-  run_cmd sudo apt update
-  run_cmd sudo apt upgrade -y
-  run_cmd sudo apt autoremove -y
-}
-
-update_media_stack() {
-  local dir
-
-  for dir in "${COMPOSE_DIRS[@]}"; do
-    update_compose_project "$dir"
+  [[ "$DRY_RUN" == '1' ]] || die 'las actualizaciones en lote estan bloqueadas; use service <servicio>'
+  for target in "${!UPDATE_DIRS[@]}"; do
+    update_allowed_service "$target"
   done
-
-  update_portainer
-}
-
-refresh_dashboard_cache() {
-  if [[ ! -x "$STACK_DASHBOARD_SCRIPT" ]]; then
-    log "Skipping dashboard cache refresh: script not executable at $STACK_DASHBOARD_SCRIPT"
-    return 0
-  fi
-
-  log 'Refreshing stack dashboard cache'
-  run_cmd "$STACK_DASHBOARD_SCRIPT"
-}
-
-build_summary() {
-  local count
-  count="$(docker ps -q | wc -l | tr -d ' ')"
-  summary=$(cat <<EOF
-✅ Update completado
-Modo: $MODE
-Estado: $status
-Contenedores up: $count
-Hora: $(date '+%d/%m/%Y %H:%M')
-EOF
-)
+  status='dry-run'
 }
 
 main() {
-  log 'Starting media stack update'
-  if [[ "$DRY_RUN" == "1" ]]; then
-    log 'Running in DRY_RUN mode'
-  fi
+  validate_settings
+  require_cmd docker
+  require_cmd jq
+  require_cmd tar
+  require_cmd gzip
 
   case "$MODE" in
-    all)
-      update_system_packages
-      update_media_stack
+    help|-h|--help)
+      usage
+      return 0
       ;;
-    system)
-      update_system_packages
-      ;;
-    media)
-      update_media_stack
-      ;;
-    *)
-      log "Unknown mode: $MODE"
-      log 'Use: all | system | media'
-      exit 1
+    list)
+      list_policy
+      return 0
       ;;
   esac
 
-  run_cmd docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
-  if [[ "$DRY_RUN" == "1" ]]; then
-    status='dry-run'
-  else
-    status='ok'
-  fi
-  build_summary
+  setup_logging
+  log "Starting safe update workflow: mode=$MODE target=${TARGET:-none} dry_run=$DRY_RUN"
+
+  case "$MODE" in
+    service)
+      update_allowed_service "$TARGET"
+      ;;
+    media|all)
+      [[ "$MODE" != 'all' ]] || log 'System package updates are disabled; previewing media allowlist only'
+      preview_allowlist
+      ;;
+    portainer)
+      update_portainer
+      ;;
+    system)
+      die 'las actualizaciones del sistema estan bloqueadas en este script'
+      ;;
+    *)
+      usage
+      die "modo desconocido: $MODE"
+      ;;
+  esac
+
+  summary="Update workflow: mode=$MODE target=${TARGET:-none} status=$status"
   log "$summary"
   refresh_dashboard_cache
   notify_whatsapp "$summary"
-  log 'Media stack update completed'
+  log 'Safe update workflow completed'
 }
 
 main "$@"
