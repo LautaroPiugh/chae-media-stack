@@ -6,6 +6,7 @@ Monitorea las descargas de Bazarr y traduce automáticamente cuando detecta subt
 
 import requests
 import json
+import re
 import time
 import os
 import sys
@@ -14,6 +15,12 @@ from datetime import datetime, timedelta
 BAZARR_URL = "http://localhost:6767"
 API_KEY = os.getenv('BAZARR_API_KEY', 'CHANGEME')
 HEADERS = {"X-API-KEY": API_KEY}
+
+def is_sdh_subtitle(path):
+    """True si el sub es para sordos (SDH/HI/CC) según su nombre de archivo."""
+    if not path:
+        return False
+    return bool(re.search(r'\bsdh\b|\bcc\b|\bhi\b|hearing.impaired', os.path.basename(path), re.I))
 
 def get_recent_downloads(minutes=5):
     """Obtiene descargas recientes de episodios y películas"""
@@ -32,6 +39,9 @@ def get_recent_downloads(minutes=5):
     
     for ep in episodes:
         if ep.get('action') == 1 and ep.get('language', {}).get('code2') == 'en':
+            if is_sdh_subtitle(ep.get('subtitles_path')):
+                print(f"  ⊘ SDH omitido: {ep.get('seriesTitle')} {ep.get('episode_number')}")
+                continue
             english_downloads.append({
                 'type': 'episode',
                 'title': f"{ep.get('seriesTitle')} {ep.get('episode_number')}",
@@ -43,6 +53,9 @@ def get_recent_downloads(minutes=5):
     
     for movie in movies:
         if movie.get('action') == 1 and movie.get('language', {}).get('code2') == 'en':
+            if is_sdh_subtitle(movie.get('subtitles_path')):
+                print(f"  ⊘ SDH omitido: {movie.get('title')}")
+                continue
             english_downloads.append({
                 'type': 'movie',
                 'title': movie.get('title'),

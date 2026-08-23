@@ -12,9 +12,14 @@ import os
 import sys
 import re
 import gzip
+import fcntl
+import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime
 
 ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'check_es_subs.env')
+LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'check_es_subs.log')
+LOCK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.check_es_subs.lock')
 
 def load_env(path):
     if not os.path.isfile(path):
@@ -37,9 +42,35 @@ HEADERS = {"X-API-KEY": API_KEY}
 NOTIFY_URL = os.getenv('NOTIFY_URL', 'http://localhost:3555/notify/system-update')
 NOTIFY_SECRET = os.getenv('NOTIFY_SECRET', '')
 PAUSE = 1
+NEG_TTL = 30 * 86400  # expiracion de entradas negativas del cache OMDb (30 dias)
+
+logger = logging.getLogger('check_es_subs')
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    _fh = RotatingFileHandler(LOG_PATH, maxBytes=2_000_000, backupCount=3)
+    _fh.setFormatter(logging.Formatter('[%(asctime)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+    _sh = logging.StreamHandler(sys.stdout)
+    _sh.setFormatter(logging.Formatter('[%(asctime)s] %(message)s', datefmt='%H:%M:%S'))
+    logger.addHandler(_fh)
+    logger.addHandler(_sh)
+
+_lock_fh = None
+
+def acquire_lock():
+    """Evita corridas solapadas de cron (flock exclusivo no bloqueante)."""
+    global _lock_fh
+    _lock_fh = open(LOCK_PATH, 'w')
+    try:
+        fcntl.flock(_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        logger.info("Ya hay una corrida en curso; saliendo")
+        sys.exit(0)
+
+class BazarrDown(Exception):
+    pass
 
 def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+    logger.info(msg)
 
 def notify_whatsapp(text):
     if not NOTIFY_URL or not NOTIFY_SECRET:
@@ -52,8 +83,20 @@ def notify_whatsapp(text):
         pass
 
 def get_json(url, params=None, timeout=30):
-    r = requests.get(url, headers=HEADERS, params=params, timeout=timeout)
-    return r.json() if r.status_code == 200 else {}
+    """GET JSON contra Bazarr. Devuelve None si Bazarr fallo (timeout/HTTP/JSON)."""
+    try:
+        r = requests.get(url, headers=HEADERS, params=params, timeout=timeout)
+    except requests.RequestException as e:
+        log(f"ERROR: Bazarr inaccesible ({url}): {e}")
+        return None
+    if r.status_code != 200:
+        log(f"ERROR: Bazarr respondio HTTP {r.status_code} en {url}")
+        return None
+    try:
+        return r.json()
+    except ValueError:
+        log(f"ERROR: Bazarr devolvio JSON invalido en {url}")
+        return None
 
 def api_post(base, params):
     r = requests.post(base, headers=HEADERS, params=params, timeout=30)
@@ -79,22 +122,59 @@ def load_omdb_cache():
         try:
             with open(OMDB_CACHE_PATH) as f:
                 omdb_cache = json.load(f)
+            # migrar negativos viejos (null permanente) a formato con TTL
+            for k, v in omdb_cache.items():
+                if v is None:
+                    omdb_cache[k] = {'neg': time.time()}
             log(f"Cargados {len(omdb_cache)} items del cache OMDb")
         except Exception:
             omdb_cache = {}
 
 def save_omdb_cache():
+    """Escritura atomica (tmp + rename) para no corromper el cache."""
     try:
-        with open(OMDB_CACHE_PATH, 'w') as f:
+        tmp = f"{OMDB_CACHE_PATH}.tmp"
+        with open(tmp, 'w') as f:
             json.dump(omdb_cache, f, indent=2)
+        os.replace(tmp, OMDB_CACHE_PATH)
         log(f"Cache OMDb guardado ({len(omdb_cache)} items)")
     except Exception as e:
         log(f"Error guardando cache OMDb: {e}")
+
+def cached_imdb(key):
+    """Devuelve (hit, imdb_id|None). Las entradas negativas expiran tras NEG_TTL."""
+    v = omdb_cache.get(key, '__miss__')
+    if v == '__miss__':
+        return False, None
+    if isinstance(v, dict):
+        if time.time() - float(v.get('neg', 0)) < NEG_TTL:
+            return True, None
+        del omdb_cache[key]
+        return False, None
+    return True, v
 
 def has_es_subs(subtitles):
     if not subtitles:
         return False
     return any(s.get('code2') in ('es', 'ea', 'sp') for s in subtitles)
+
+def is_hearing_impaired(entry):
+    """True si el sub es para sordos (SDH/CC/HI), por flag del API o por nombre."""
+    if not isinstance(entry, dict):
+        return False
+    if str(entry.get('SubHearingImpaired', '0')) == '1':
+        return True
+    if str(entry.get('hearing_impaired', '')).lower() in ('true', '1'):
+        return True
+    name = str(entry.get('SubFileName', '') or entry.get('release_info', ''))
+    return bool(re.search(r'\bsdh\b|\bcc\b|\bhi\b|hearing.impaired', name, re.I))
+
+def without_hearing_impaired(entries):
+    filtered = [e for e in entries if isinstance(e, dict) and not is_hearing_impaired(e)]
+    skipped = len(entries) - len(filtered)
+    if skipped:
+        log(f"    Descartados {skipped} subs para sordos (SDH)")
+    return filtered
 
 def find_video_file(movie_dir):
     for f in os.listdir(movie_dir):
@@ -127,12 +207,12 @@ def download_opensubtitles_rest(title, year, imdb_id=None):
     imdb_num = imdb_id.replace('tt', '')
     log(f"    Buscando en OpenSubtitles REST API (IMDB: {imdb_id})...")
     try:
-        url = f"https://rest.opensubtitles.org/search/imdbid-{imdb_num}/sublanguageid-spa"
+        url = f"https://rest.opensubtitles.org/search/hearing_impaired-excluded/imdbid-{imdb_num}/sublanguageid-spa"
         r = requests.get(url, headers={'User-Agent': 'SubDownloader 2.0.1'}, timeout=10)
         if r.status_code != 200:
             log(f"    Error API: {r.status_code}")
             return False
-        data = r.json()
+        data = without_hearing_impaired(r.json())
         if not data or len(data) == 0:
             log(f"    Sin subs ES en OpenSubtitles")
             return False
@@ -174,11 +254,11 @@ def download_english_sub(imdb_id):
     imdb_num = imdb_id.replace('tt', '')
     log(f"    Buscando sub EN en OpenSubtitles...")
     try:
-        url = f"https://rest.opensubtitles.org/search/imdbid-{imdb_num}/sublanguageid-eng"
+        url = f"https://rest.opensubtitles.org/search/hearing_impaired-excluded/imdbid-{imdb_num}/sublanguageid-eng"
         r = requests.get(url, headers={'User-Agent': 'SubDownloader 2.0.1'}, timeout=10)
         if r.status_code != 200:
             return None
-        data = r.json()
+        data = without_hearing_impaired(r.json())
         if not data:
             log(f"    Sin subs EN en OpenSubtitles")
             return None
@@ -344,29 +424,25 @@ OS_CACHE = {}
 
 def get_episode_imdb_id(series_title, season, episode):
     key = f"{series_title}|S{season:02d}E{episode:02d}"
-    if key in omdb_cache:
-        return omdb_cache[key]
+    hit, val = cached_imdb(key)
+    if hit:
+        return val
     try:
         from urllib.parse import quote
-        url = f"http://www.omdbapi.com/?apikey={OMDB_API_KEY}&t={quote(series_title)}&season={season}&episode={episode}"
+        url = f"https://www.omdbapi.com/?apikey={OMDB_API_KEY}&t={quote(series_title)}&season={season}&episode={episode}"
         r = requests.get(url, timeout=10)
         if r.status_code != 200:
-            omdb_cache[key] = None
-            save_omdb_cache()
+            omdb_cache[key] = {'neg': time.time()}
             return None
         data = r.json()
         if data.get('Response') != 'True' or not data.get('imdbID'):
-            omdb_cache[key] = None
-            save_omdb_cache()
+            omdb_cache[key] = {'neg': time.time()}
             return None
         imdb_id = data['imdbID']
         omdb_cache[key] = imdb_id
-        save_omdb_cache()
         return imdb_id
     except Exception as e:
         log(f"    Error OMDb: {e}")
-        omdb_cache[key] = None
-        save_omdb_cache()
         return None
 
 def download_episode_es_opensubtitles_by_ep_imdb(episode_imdb_id, season, episode, video_path):
@@ -374,12 +450,12 @@ def download_episode_es_opensubtitles_by_ep_imdb(episode_imdb_id, season, episod
     imdb_num = episode_imdb_id.replace('tt', '')
     log(f"    Buscando en OpenSubtitles por IMDB de episodio ({episode_imdb_id})...")
     try:
-        url = f"https://rest.opensubtitles.org/search/imdbid-{imdb_num}/sublanguageid-spa"
+        url = f"https://rest.opensubtitles.org/search/hearing_impaired-excluded/imdbid-{imdb_num}/sublanguageid-spa"
         r = requests.get(url, headers={'User-Agent': 'SubDownloader 2.0.1'}, timeout=10)
         if r.status_code != 200:
             log(f"    Error API: {r.status_code}")
             return False
-        data = r.json()
+        data = without_hearing_impaired(r.json())
         if not data:
             log(f"    Sin subs ES en OpenSubtitles")
             return False
@@ -416,12 +492,12 @@ def download_episode_es_opensubtitles(imdb_id, season, episode, video_path):
     log(f"    Buscando en OpenSubtitles para S{season}E{episode}...")
     try:
         if imdb_id not in OS_CACHE:
-            url = f"https://rest.opensubtitles.org/search/imdbid-{imdb_num}/sublanguageid-spa"
+            url = f"https://rest.opensubtitles.org/search/hearing_impaired-excluded/imdbid-{imdb_num}/sublanguageid-spa"
             r = requests.get(url, headers={'User-Agent': 'SubDownloader 2.0.1'}, timeout=10)
             if r.status_code != 200:
                 log(f"    Error API: {r.status_code}")
                 return False
-            data = r.json()
+            data = without_hearing_impaired(r.json())
             if not data:
                 log(f"    Sin resultados en OpenSubtitles")
                 OS_CACHE[imdb_id] = []
@@ -467,7 +543,9 @@ def download_episode_es_opensubtitles(imdb_id, season, episode, video_path):
 
 def process_movies():
     log("=== Verificando peliculas ===")
-    data = get_json(f"{BAZARR_URL}/api/movies?limit=500")
+    data = get_json(f"{BAZARR_URL}/api/movies", {"limit": 2000})
+    if data is None:
+        raise BazarrDown("no se pudo obtener la lista de peliculas")
     movies = data.get('data', [])
     log(f"Total peliculas: {len(movies)}")
 
@@ -495,7 +573,9 @@ def process_movies():
             available = providers.get('data', [])
         except Exception:
             available = []
-        es_available = [s for s in available if isinstance(s, dict) and s.get('language') == 'es']
+        es_available = without_hearing_impaired(
+            [s for s in available if isinstance(s, dict) and s.get('language') == 'es']
+        )
 
         if es_available:
             best = max(es_available, key=lambda x: x.get('score', 0))
@@ -542,7 +622,9 @@ def process_movies():
 
 def process_series():
     log("=== Verificando series ===")
-    data = get_json(f"{BAZARR_URL}/api/series?limit=100")
+    data = get_json(f"{BAZARR_URL}/api/series", {"limit": 2000})
+    if data is None:
+        raise BazarrDown("no se pudo obtener la lista de series")
     series_list = data.get('data', [])
     log(f"Total series en Bazarr: {len(series_list)}")
 
@@ -563,7 +645,7 @@ def process_series():
             continue
 
         episodes = get_json(f"{BAZARR_URL}/api/episodes", {"seriesid[]": sid})
-        eps = episodes.get('data', [])
+        eps = episodes.get('data', []) if isinstance(episodes, dict) else []
 
         if not eps:
             log(f"    No se pudieron obtener episodios")
@@ -626,7 +708,9 @@ def process_series():
                 available = providers.get('data', [])
             except Exception:
                 available = []
-            es_avail = [s for s in available if isinstance(s, dict) and s.get('language') in ('es', 'ea', 'sp')]
+            es_avail = without_hearing_impaired(
+                [s for s in available if isinstance(s, dict) and s.get('language') in ('es', 'ea', 'sp')]
+            )
 
             if es_avail:
                 best = max(es_avail, key=lambda x: x.get('score', 0))
@@ -665,8 +749,8 @@ def translate_movie_by_title(title_input):
     load_env(ENV_PATH)
     load_omdb_cache()
     log(f"Buscando pelicula: {title_input}")
-    data = get_json(f"{BAZARR_URL}/api/movies?limit=500")
-    movies = data.get('data', [])
+    data = get_json(f"{BAZARR_URL}/api/movies", {"limit": 2000})
+    movies = data.get('data', []) if isinstance(data, dict) else []
     matches = [m for m in movies if title_input.lower() in m.get('title', '').lower()]
     if not matches:
         log(f"No se encontro pelicula: {title_input}")
@@ -702,10 +786,18 @@ def translate_movie_by_title(title_input):
 
 def main():
     log("=== INICIO VERIFICACION SUBTITULOS ES ===")
+    acquire_lock()
     load_omdb_cache()
-    m_ok, m_missing, m_downloaded, m_failed = process_movies()
-    s_ok, s_downloaded, s_failed = process_series()
-    save_omdb_cache()
+    try:
+        m_ok, m_missing, m_downloaded, m_failed = process_movies()
+        s_ok, s_downloaded, s_failed = process_series()
+    except BazarrDown as e:
+        msg = f"⚠️ Bazarr no responde ({e}); verificacion de subtitulos abortada"
+        log(f"ERROR: {msg}")
+        notify_whatsapp(msg)
+        sys.exit(2)
+    finally:
+        save_omdb_cache()
     log("=== FIN ===")
 
     total_downloaded = m_downloaded + s_downloaded
@@ -725,9 +817,15 @@ def main():
 
 
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 2 and sys.argv[1] == '--translate-movie':
-        result = translate_movie_by_title(' '.join(sys.argv[2:]))
-        print(result)
-        sys.exit(0)
-    main()
+    try:
+        if len(sys.argv) > 2 and sys.argv[1] == '--translate-movie':
+            result = translate_movie_by_title(' '.join(sys.argv[2:]))
+            print(result)
+            sys.exit(0)
+        main()
+    except SystemExit:
+        raise
+    except Exception:
+        logger.exception("Fallo critico en check_es_subs.py")
+        notify_whatsapp("❌ check_es_subs.py fallo con excepcion; revisar logs")
+        sys.exit(1)

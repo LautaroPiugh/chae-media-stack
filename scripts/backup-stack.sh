@@ -12,6 +12,11 @@ PG_CONTAINER="${PG_BACKUP_CONTAINER:-}"
 PG_USER="${PG_BACKUP_USER:-}"
 PG_DATABASE="${PG_BACKUP_DATABASE:-}"
 BACKUP_LOCK_FILE="${BACKUP_LOCK_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/chae-backup-stack.lock}"
+MIRROR_DIR="${STACK_BACKUP_MIRROR_DIR:-/mnt/media1/backups/stack}"
+NOTIFY_URL="${BACKUP_NOTIFY_URL:-http://127.0.0.1:3555/notify/system-update}"
+NOTIFY_ENABLED="${BACKUP_NOTIFY_ENABLED:-1}"
+NOTIFY_ON_SUCCESS="${BACKUP_NOTIFY_SUCCESS:-1}"
+BOT_ENV_FILE="${BACKUP_BOT_ENV_FILE:-$PROJECT_DIR/jellyfin-whatsapp-bot/.env}"
 TMP_DUMP=''
 JELLYFIN_DB_SNAPSHOT=''
 TMP_JELLYFIN_GZIP=''
@@ -22,10 +27,45 @@ log() {
   printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"
 }
 
+notify_token() {
+  if [[ -n "${BACKUP_NOTIFY_TOKEN:-}" ]]; then
+    printf '%s' "$BACKUP_NOTIFY_TOKEN"
+    return 0
+  fi
+  [[ -f "$BOT_ENV_FILE" ]] || return 1
+  sed -n 's/^WHATSAPP_UPDATE_NOTIFY_TOKEN=//p' "$BOT_ENV_FILE" | head -n 1
+}
+
+notify_whatsapp() {
+  local message="$1"
+  local token=''
+
+  [[ "$NOTIFY_ENABLED" == '1' && "$DRY_RUN" == '0' ]] || return 0
+  token="$(notify_token 2>/dev/null || true)"
+  if [[ -z "$token" ]]; then
+    log "WARN: notificacion WhatsApp omitida (sin token en $BOT_ENV_FILE)"
+    return 0
+  fi
+  curl -fsS --connect-timeout 5 --max-time 15 -X POST "$NOTIFY_URL" \
+    -H "x-update-token: $token" \
+    -H 'Content-Type: application/json' \
+    -d "$(jq -n --arg message "$message" '{message: $message}')" >/dev/null 2>&1 \
+    || log "WARN: no se pudo enviar la notificacion WhatsApp"
+}
+
 die() {
   log "ERROR: $*"
+  notify_whatsapp "❌ Backup del stack FALLO: $*"
   exit 1
 }
+
+on_error() {
+  local line="$1"
+  log "ERROR inesperado en linea $line"
+  notify_whatsapp "❌ Backup del stack FALLO inesperadamente (linea $line). Revisar logs."
+}
+
+trap 'on_error "$LINENO"' ERR
 
 cleanup() {
   if [[ -n "$TMP_DUMP" && -f "$TMP_DUMP" ]]; then
@@ -285,6 +325,24 @@ CONFIG_DIRS=(
   "uptime-kuma:$PROJECT_DIR/services/uptime-kuma"
 )
 
+tar_archive() {
+  # tar de config viva: los -wal/-shm cambian constantemente; se excluyen y
+  # se tolera exit 1 (warning "file changed"), no exit 2 (fatal).
+  local archive="$1"
+  shift
+  local rc=0
+  tar czf "$archive" \
+    --exclude='*/config/*.db-wal' \
+    --exclude='*/config/*.db-shm' \
+    --warning=no-file-changed \
+    "$@" || rc=$?
+  if [[ $rc -gt 1 ]]; then
+    die "tar fallo con codigo $rc para $archive"
+  elif [[ $rc -eq 1 ]]; then
+    log "WARN: tar reporto cambios durante la lectura (codigo 1, tolerado)"
+  fi
+}
+
 for pair in "${CONFIG_DIRS[@]}"; do
   name="${pair%%:*}"
   src="${pair##*:}"
@@ -293,13 +351,13 @@ for pair in "${CONFIG_DIRS[@]}"; do
     archive="$BACKUP_DIR/configs/${name}-$DATE.tar.gz"
     log "Destino: $archive"
     if [[ "$name" == 'jellyfin' ]]; then
-      tar czf "$archive" \
+      tar_archive "$archive" \
         --exclude='jellyfin/config/data/data/jellyfin.db' \
         --exclude='jellyfin/config/data/data/jellyfin.db-shm' \
         --exclude='jellyfin/config/data/data/jellyfin.db-wal' \
         -C "$(dirname "$src")" "$(basename "$src")"
     else
-      tar czf "$archive" -C "$(dirname "$src")" "$(basename "$src")"
+      tar_archive "$archive" -C "$(dirname "$src")" "$(basename "$src")"
     fi
   else
     die "falta el directorio obligatorio de $name: $src"
@@ -310,4 +368,25 @@ done
 log "Limpiando backups con mas de $RETENTION_DAYS dias..."
 find "$BACKUP_DIR" -type f -name "*.gz" -mtime "+$RETENTION_DAYS" -delete
 
-log "Backup completado: $BACKUP_DIR"
+# ── Copia espejo a segundo disco (media1, rama independiente del mergerfs) ──
+MIRROR_OK='0'
+if command -v rsync >/dev/null 2>&1 && mkdir -p "$MIRROR_DIR" 2>/dev/null && [[ -w "$MIRROR_DIR" ]]; then
+  log "Sincronizando copia espejo a $MIRROR_DIR ..."
+  if rsync -a --delete "$BACKUP_DIR/" "$MIRROR_DIR/"; then
+    MIRROR_OK='1'
+    log "Copia espejo OK en disco independiente: $MIRROR_DIR"
+  else
+    log "WARN: fallo rsync de la copia espejo"
+    notify_whatsapp "⚠️ Backup creado pero FALLO la copia espejo a media1. Revisar."
+  fi
+else
+  log "WARN: copia espejo omitida (sin rsync o $MIRROR_DIR no disponible)"
+  notify_whatsapp "⚠️ Backup creado pero copia espejo OMITIDA ($MIRROR_DIR no disponible)."
+fi
+
+TOTAL_FILES="$(find "$BACKUP_DIR" -type f -name '*.gz' | wc -l | tr -d '[:space:]')"
+TOTAL_SIZE="$(du -sh "$BACKUP_DIR" 2>/dev/null | cut -f1 || true)"
+log "Backup completado: $BACKUP_DIR ($TOTAL_FILES archivos .gz, $TOTAL_SIZE)"
+if [[ "$NOTIFY_ON_SUCCESS" == '1' ]]; then
+  notify_whatsapp "✅ Backup del stack OK: $TOTAL_FILES archivos ($TOTAL_SIZE). Espejo media1: $([[ $MIRROR_OK == 1 ]] && echo OK || echo FALLO)."
+fi
