@@ -1,3 +1,4 @@
+const { fetchWithTimeout } = require('../utils/http');
 const config = require('../config');
 
 function getHeaders() {
@@ -60,7 +61,7 @@ async function searchSeries(query) {
 
   const url = `${config.sonarr.url}/api/v3/series/lookup?term=${encodeURIComponent(query)}`;
 
-  const res = await fetch(url, { headers: getHeaders() });
+  const res = await fetchWithTimeout(url, { headers: getHeaders() });
 
   if (!res.ok) {
     throw new Error(`Sonarr API error: ${res.status} ${res.statusText}`);
@@ -103,7 +104,7 @@ async function addSeries(series, options = {}) {
     };
   }
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(payload),
@@ -122,7 +123,7 @@ async function getSeriesById(seriesId) {
     throw new Error('Sonarr no está configurado. Revisá SONARR_URL y SONARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.sonarr.url}/api/v3/series/${seriesId}`, {
+  const res = await fetchWithTimeout(`${config.sonarr.url}/api/v3/series/${seriesId}`, {
     headers: getHeaders(),
   });
 
@@ -141,7 +142,7 @@ async function setSeriesSeasonMonitoring(seriesId, selectedSeason) {
     monitored: season.seasonNumber === selectedSeason,
   }));
 
-  const res = await fetch(`${config.sonarr.url}/api/v3/series/${seriesId}`, {
+  const res = await fetchWithTimeout(`${config.sonarr.url}/api/v3/series/${seriesId}`, {
     method: 'PUT',
     headers: getHeaders(),
     body: JSON.stringify(series),
@@ -166,7 +167,7 @@ async function searchExistingSeries(seriesId) {
     seriesId,
   };
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(payload),
@@ -185,7 +186,7 @@ async function refreshExistingSeries(seriesId) {
     throw new Error('Sonarr no está configurado. Revisá SONARR_URL y SONARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.sonarr.url}/api/v3/command`, {
+  const res = await fetchWithTimeout(`${config.sonarr.url}/api/v3/command`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({
@@ -207,7 +208,7 @@ async function rescanExistingSeries(seriesId) {
     throw new Error('Sonarr no está configurado. Revisá SONARR_URL y SONARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.sonarr.url}/api/v3/command`, {
+  const res = await fetchWithTimeout(`${config.sonarr.url}/api/v3/command`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({
@@ -231,7 +232,7 @@ async function getQueue() {
 
   const url = `${config.sonarr.url}/api/v3/queue?page=1`;
 
-  const res = await fetch(url, { headers: getHeaders() });
+  const res = await fetchWithTimeout(url, { headers: getHeaders() });
 
   if (!res.ok) {
     return [];
@@ -254,7 +255,7 @@ async function listSeries() {
     throw new Error('Sonarr no está configurado. Revisá SONARR_URL y SONARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.sonarr.url}/api/v3/series`, { headers: getHeaders() });
+  const res = await fetchWithTimeout(`${config.sonarr.url}/api/v3/series`, { headers: getHeaders() });
   if (!res.ok) {
     throw new Error(`Sonarr API error: ${res.status} ${res.statusText}`);
   }
@@ -271,7 +272,7 @@ async function listMissingSeries() {
     throw new Error('Sonarr no está configurado. Revisá SONARR_URL y SONARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.sonarr.url}/api/v3/series`, { headers: getHeaders() });
+  const res = await fetchWithTimeout(`${config.sonarr.url}/api/v3/series`, { headers: getHeaders() });
   if (!res.ok) {
     throw new Error(`Sonarr API error: ${res.status} ${res.statusText}`);
   }
@@ -291,7 +292,7 @@ async function searchAllMissingSeries() {
   let triggered = 0;
 
   for (const s of missing) {
-    await fetch(url, {
+    await fetchWithTimeout(url, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ name: 'SeriesSearch', seriesId: s.raw.id }),
@@ -307,7 +308,7 @@ async function deleteSeries(seriesId) {
     throw new Error('Sonarr no está configurado. Revisá SONARR_URL y SONARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.sonarr.url}/api/v3/series/${seriesId}?deleteFiles=true&addImportListExclusion=false`, {
+  const res = await fetchWithTimeout(`${config.sonarr.url}/api/v3/series/${seriesId}?deleteFiles=true&addImportListExclusion=false`, {
     method: 'DELETE',
     headers: getHeaders(),
   });

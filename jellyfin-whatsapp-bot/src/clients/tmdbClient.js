@@ -1,3 +1,4 @@
+const { fetchWithTimeout } = require('../utils/http');
 const config = require('../config');
 
 function getHeaders() {
@@ -16,7 +17,7 @@ async function getTrending(timeWindow = 'week') {
     throw new Error('TMDB no esta configurado. Revisa TMDB_API_KEY en .env.');
   }
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://api.themoviedb.org/3/trending/movie/${timeWindow}?language=es`,
     { headers: getHeaders() }
   );

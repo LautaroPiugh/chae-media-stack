@@ -1,3 +1,4 @@
+const { fetchWithTimeout } = require('../utils/http');
 const config = require('../config');
 
 function getHeaders() {
@@ -23,7 +24,7 @@ async function getUserLibraryItems(includeItemTypes = ['Movie', 'Series']) {
     SortBy: 'SortName',
   });
 
-  const res = await fetch(`${config.jellyfin.url}/Users/${config.jellyfin.userId}/Items?${params.toString()}`, {
+  const res = await fetchWithTimeout(`${config.jellyfin.url}/Users/${config.jellyfin.userId}/Items?${params.toString()}`, {
     headers: getHeaders(),
   });
 
@@ -47,7 +48,7 @@ async function getWatchedMovies() {
     Fields: 'ProviderIds,UserData,ProductionYear',
   });
 
-  const res = await fetch(`${config.jellyfin.url}/Users/${config.jellyfin.userId}/Items?${params.toString()}`, {
+  const res = await fetchWithTimeout(`${config.jellyfin.url}/Users/${config.jellyfin.userId}/Items?${params.toString()}`, {
     headers: getHeaders(),
   });
 
@@ -67,7 +68,7 @@ async function getWatchedMovies() {
 }
 
 async function deleteJellyfinItem(itemId) {
-  const res = await fetch(`${config.jellyfin.url}/Items/${itemId}`, {
+  const res = await fetchWithTimeout(`${config.jellyfin.url}/Items/${itemId}`, {
     method: 'DELETE',
     headers: getHeaders(),
   });

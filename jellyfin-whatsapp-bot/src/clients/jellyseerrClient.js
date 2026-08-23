@@ -1,3 +1,4 @@
+const { fetchWithTimeout } = require('../utils/http');
 const config = require('../config');
 
 function getHeaders() {
@@ -16,7 +17,7 @@ async function getStatus() {
     throw new Error('Jellyseerr no está configurado.');
   }
 
-  const res = await fetch(`${config.jellyseerr.url}/api/v1/status`, { headers: getHeaders() });
+  const res = await fetchWithTimeout(`${config.jellyseerr.url}/api/v1/status`, { headers: getHeaders() });
   if (!res.ok) {
     throw new Error(`Jellyseerr status error: ${res.status}`);
   }
@@ -29,7 +30,7 @@ async function getRequests(take = 10, skip = 0) {
     throw new Error('Jellyseerr no está configurado.');
   }
 
-  const res = await fetch(`${config.jellyseerr.url}/api/v1/request?take=${take}&skip=${skip}`, { headers: getHeaders() });
+  const res = await fetchWithTimeout(`${config.jellyseerr.url}/api/v1/request?take=${take}&skip=${skip}`, { headers: getHeaders() });
   if (!res.ok) {
     throw new Error(`Jellyseerr request error: ${res.status}`);
   }

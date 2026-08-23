@@ -1,3 +1,4 @@
+const { fetchWithTimeout } = require('../utils/http');
 const config = require('../config');
 
 const REQUEST_TIMEOUT_MS = 10000;
@@ -26,7 +27,7 @@ async function request(path, { method = 'GET', body } = {}) {
   }
 
   const credentials = Buffer.from(`${config.adguard.username}:${config.adguard.password}`).toString('base64');
-  const response = await fetch(`${getBaseUrl()}/control${path}`, {
+  const response = await fetchWithTimeout(`${getBaseUrl()}/control${path}`, {
     method,
     headers: {
       Accept: 'application/json',

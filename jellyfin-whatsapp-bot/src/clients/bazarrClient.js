@@ -1,3 +1,4 @@
+const { fetchWithTimeout } = require('../utils/http');
 const apiKey = process.env.BAZARR_API_KEY || '';
 const baseUrl = process.env.BAZARR_URL || 'http://bazarr:6767';
 
@@ -16,7 +17,7 @@ async function runSeriesAction(seriesId, action) {
     return false;
   }
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/api/series?seriesid=${seriesId}&action=${encodeURIComponent(action)}`,
     {
       method: 'PATCH',

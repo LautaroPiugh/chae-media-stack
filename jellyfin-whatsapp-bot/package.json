@@ -21,9 +21,12 @@
   "dependencies": {
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "6.7.24",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.0",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
     "pino": "^9.4.0",
     "qrcode": "1.5.4"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

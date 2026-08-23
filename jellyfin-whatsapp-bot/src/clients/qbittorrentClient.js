@@ -1,3 +1,4 @@
+const { fetchWithTimeout } = require('../utils/http');
 const config = require('../config');
 
 function isConfigured() {
@@ -14,7 +15,7 @@ async function login() {
     password: config.qbittorrent.password,
   });
 
-  const response = await fetch(`${config.qbittorrent.url}/api/v2/auth/login`, {
+  const response = await fetchWithTimeout(`${config.qbittorrent.url}/api/v2/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -36,7 +37,7 @@ async function login() {
 
 async function getActiveTorrents() {
   const cookie = await login();
-  const response = await fetch(`${config.qbittorrent.url}/api/v2/torrents/info?filter=active`, {
+  const response = await fetchWithTimeout(`${config.qbittorrent.url}/api/v2/torrents/info?filter=active`, {
     headers: {
       Cookie: cookie,
     },
@@ -58,7 +59,7 @@ async function getActiveTorrents() {
 
 async function listTorrents() {
   const cookie = await login();
-  const response = await fetch(`${config.qbittorrent.url}/api/v2/torrents/info`, {
+  const response = await fetchWithTimeout(`${config.qbittorrent.url}/api/v2/torrents/info`, {
     headers: {
       Cookie: cookie,
     },
@@ -93,7 +94,7 @@ async function deleteTorrentsByName(query, category = null) {
     deleteFiles: 'true',
   });
 
-  const response = await fetch(`${config.qbittorrent.url}/api/v2/torrents/delete`, {
+  const response = await fetchWithTimeout(`${config.qbittorrent.url}/api/v2/torrents/delete`, {
     method: 'POST',
     headers: {
       Cookie: cookie,
@@ -123,7 +124,7 @@ async function deleteCompletedTorrents() {
     deleteFiles: 'false',
   });
 
-  const response = await fetch(`${config.qbittorrent.url}/api/v2/torrents/delete`, {
+  const response = await fetchWithTimeout(`${config.qbittorrent.url}/api/v2/torrents/delete`, {
     method: 'POST',
     headers: {
       Cookie: cookie,

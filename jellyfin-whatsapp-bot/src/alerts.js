@@ -1,3 +1,4 @@
+const { fetchWithTimeout } = require('./utils/http');
 const { statfs } = require('fs/promises');
 const fs = require('fs');
 const config = require('./config');
@@ -30,7 +31,7 @@ const MONITORED_IMAGES = [
 
 async function checkUrl(name, url) {
   try {
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     return res.ok;
   } catch {
     return false;
@@ -47,7 +48,7 @@ async function checkServices() {
   for (const [name, url, headers] of targets) {
     let ok = false;
     try {
-      const res = await fetch(url, { headers });
+      const res = await fetchWithTimeout(url, { headers });
       ok = res.ok;
     } catch {
       ok = false;
@@ -167,7 +168,7 @@ async function checkProviderHealth() {
 
   for (const { name, url, headers } of checks) {
     try {
-      const res = await fetch(url, { headers });
+      const res = await fetchWithTimeout(url, { headers });
       const health = await res.json();
       const key = `${name}:health`;
 
@@ -196,7 +197,7 @@ async function checkSubtitleGaps() {
   }
 
   try {
-    const res = await fetch(`${config.bazarr.url}/api/wanted?page=1&limit=1`, {
+    const res = await fetchWithTimeout(`${config.bazarr.url}/api/wanted?page=1&limit=1`, {
       headers: { 'X-API-KEY': config.bazarr.apiKey },
     });
 
@@ -254,7 +255,7 @@ async function getLatestDigest(image) {
     return null;
   }
 
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
+  const res = await fetchWithTimeout(url, { headers, signal: AbortSignal.timeout(10000) });
   if (!res.ok) {
     return null;
   }

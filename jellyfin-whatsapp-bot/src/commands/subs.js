@@ -1,10 +1,11 @@
+const { fetchWithTimeout } = require('../utils/http');
 const config = require('../config');
 const { formatPanel } = require('../utils/panel');
 
 async function fetchBazarr(path) {
   try {
     const url = `${config.bazarr.url}${path}`;
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: { 'X-API-KEY': config.bazarr.apiKey },
       signal: AbortSignal.timeout(15000),
     });

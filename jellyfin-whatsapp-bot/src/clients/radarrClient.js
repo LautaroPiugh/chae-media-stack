@@ -1,3 +1,4 @@
+const { fetchWithTimeout } = require('../utils/http');
 const config = require('../config');
 
 function getHeaders() {
@@ -68,7 +69,7 @@ async function searchMovie(query) {
 
   const url = `${config.radarr.url}/api/v3/movie/lookup?term=${encodeURIComponent(query)}`;
 
-  const res = await fetch(url, { headers: getHeaders() });
+  const res = await fetchWithTimeout(url, { headers: getHeaders() });
 
   if (!res.ok) {
     throw new Error(`Radarr API error: ${res.status} ${res.statusText}`);
@@ -116,7 +117,7 @@ async function addMovie(movie, options = {}) {
     },
   };
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(payload),
@@ -135,7 +136,7 @@ async function listQualityProfiles() {
     throw new Error('Radarr no está configurado. Revisá RADARR_URL y RADARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.radarr.url}/api/v3/qualityprofile`, { headers: getHeaders() });
+  const res = await fetchWithTimeout(`${config.radarr.url}/api/v3/qualityprofile`, { headers: getHeaders() });
   if (!res.ok) {
     throw new Error(`Radarr API error: ${res.status} ${res.statusText}`);
   }
@@ -154,7 +155,7 @@ async function searchExistingMovie(movieId) {
     movieIds: [movieId],
   };
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(payload),
@@ -173,7 +174,7 @@ async function getMovieById(movieId) {
     throw new Error('Radarr no está configurado. Revisá RADARR_URL y RADARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.radarr.url}/api/v3/movie/${movieId}`, { headers: getHeaders() });
+  const res = await fetchWithTimeout(`${config.radarr.url}/api/v3/movie/${movieId}`, { headers: getHeaders() });
   if (!res.ok) {
     throw new Error(`Radarr API error: ${res.status} ${res.statusText}`);
   }
@@ -185,7 +186,7 @@ async function setMovieQualityProfile(movieId, qualityProfileId) {
   const movie = await getMovieById(movieId);
   movie.qualityProfileId = qualityProfileId;
 
-  const res = await fetch(`${config.radarr.url}/api/v3/movie/${movieId}`, {
+  const res = await fetchWithTimeout(`${config.radarr.url}/api/v3/movie/${movieId}`, {
     method: 'PUT',
     headers: getHeaders(),
     body: JSON.stringify(movie),
@@ -206,7 +207,7 @@ async function getQueue() {
 
   const url = `${config.radarr.url}/api/v3/queue?page=1`;
 
-  const res = await fetch(url, { headers: getHeaders() });
+  const res = await fetchWithTimeout(url, { headers: getHeaders() });
 
   if (!res.ok) {
     return [];
@@ -229,7 +230,7 @@ async function cleanupUnavailableQueueItems() {
     return 0;
   }
 
-  const res = await fetch(`${config.radarr.url}/api/v3/queue?page=1&pageSize=100`, { headers: getHeaders() });
+  const res = await fetchWithTimeout(`${config.radarr.url}/api/v3/queue?page=1&pageSize=100`, { headers: getHeaders() });
   if (!res.ok) {
     return 0;
   }
@@ -238,7 +239,7 @@ async function cleanupUnavailableQueueItems() {
   const staleItems = (data.records || []).filter((item) => item.status === 'downloadClientUnavailable');
 
   for (const item of staleItems) {
-    await fetch(`${config.radarr.url}/api/v3/queue/${item.id}?removeFromClient=true&blocklist=true`, {
+    await fetchWithTimeout(`${config.radarr.url}/api/v3/queue/${item.id}?removeFromClient=true&blocklist=true`, {
       method: 'DELETE',
       headers: getHeaders(),
     }).catch(() => null);
@@ -252,7 +253,7 @@ async function listMovies() {
     throw new Error('Radarr no está configurado. Revisá RADARR_URL y RADARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.radarr.url}/api/v3/movie`, { headers: getHeaders() });
+  const res = await fetchWithTimeout(`${config.radarr.url}/api/v3/movie`, { headers: getHeaders() });
   if (!res.ok) {
     throw new Error(`Radarr API error: ${res.status} ${res.statusText}`);
   }
@@ -269,7 +270,7 @@ async function listMissingMovies() {
     throw new Error('Radarr no está configurado. Revisá RADARR_URL y RADARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.radarr.url}/api/v3/movie`, { headers: getHeaders() });
+  const res = await fetchWithTimeout(`${config.radarr.url}/api/v3/movie`, { headers: getHeaders() });
   if (!res.ok) {
     throw new Error(`Radarr API error: ${res.status} ${res.statusText}`);
   }
@@ -288,7 +289,7 @@ async function searchAllMissingMovies() {
   const ids = missing.map((m) => m.raw.id);
   const url = `${config.radarr.url}/api/v3/command`;
 
-  await fetch(url, {
+  await fetchWithTimeout(url, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({ name: 'MoviesSearch', movieIds: ids }),
@@ -302,7 +303,7 @@ async function deleteMovie(movieId) {
     throw new Error('Radarr no está configurado. Revisá RADARR_URL y RADARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.radarr.url}/api/v3/movie/${movieId}?deleteFiles=true&addImportExclusion=false`, {
+  const res = await fetchWithTimeout(`${config.radarr.url}/api/v3/movie/${movieId}?deleteFiles=true&addImportExclusion=false`, {
     method: 'DELETE',
     headers: getHeaders(),
   });
@@ -317,7 +318,7 @@ async function getAllMovies() {
     throw new Error('Radarr no esta configurado. Revisa RADARR_URL y RADARR_API_KEY.');
   }
 
-  const res = await fetch(`${config.radarr.url}/api/v3/movie`, { headers: getHeaders() });
+  const res = await fetchWithTimeout(`${config.radarr.url}/api/v3/movie`, { headers: getHeaders() });
   if (!res.ok) {
     throw new Error(`Radarr API error: ${res.status} ${res.statusText}`);
   }
@@ -339,7 +340,7 @@ async function lookupByTmdbId(tmdbId) {
     return null;
   }
 
-  const res = await fetch(`${config.radarr.url}/api/v3/movie/lookup?term=tmdb:${tmdbId}`, {
+  const res = await fetchWithTimeout(`${config.radarr.url}/api/v3/movie/lookup?term=tmdb:${tmdbId}`, {
     headers: getHeaders(),
   });
 

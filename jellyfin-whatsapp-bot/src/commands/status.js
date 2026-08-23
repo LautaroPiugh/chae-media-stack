@@ -1,3 +1,4 @@
+const { fetchWithTimeout } = require('../utils/http');
 const config = require('../config');
 const { isWhatsAppConnected } = require('../whatsapp');
 const { listMovies, listMissingMovies } = require('../clients/radarrClient');
@@ -17,7 +18,7 @@ function withTimeout(promise, fallback, timeoutMs = 4000) {
 
 async function checkService(url, headers = {}, timeoutMs = 4000) {
   return Promise.race([
-    fetch(url, { headers })
+    fetchWithTimeout(url, { headers })
       .then((res) => res.ok)
       .catch(() => false),
     new Promise((resolve) => setTimeout(() => resolve(false), timeoutMs)),
