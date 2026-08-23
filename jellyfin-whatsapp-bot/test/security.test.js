@@ -77,3 +77,8 @@ test('/actualizar rejects a non-admin before changing service state', async () =
   const response = await processCommand('/actualizar test title', differentJid);
   assert.match(response, /Permiso denegado/);
 });
+
+test('/actualizarsistema rejects a non-admin before contacting the broker', async () => {
+  const response = await processCommand('/actualizarsistema', differentJid);
+  assert.match(response, /Permiso denegado/);
+});

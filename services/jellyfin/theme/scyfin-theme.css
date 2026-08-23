@@ -1,0 +1,1180 @@
+/* Variables */
+:root {
+    --primary-r: 0;
+    --primary-g: 164;
+    --primary-b: 220;
+    --primary-accent-color: rgba(var(--primary-r), var(--primary-g), var(--primary-b), 1.0);
+    --secondary-accent-color: #00a4dc20;
+    --primary-background-color: #101010;
+    --secondary-background-color: #181818;
+    --primary-background-transparent: rgba(35,35,35,0.5);
+    --secondary-background-transparent: rgba(0,0,0,0.6);
+    --tertiary-background-transparent: rgba(35,35,35,0.85);
+    --rounded-cards: 15px;
+    --blur: 10px;
+
+    /* Alternate accents*/
+    --primary-alt1: rgb(calc(var(--primary-r) - 30), calc(var(--primary-g) - 30), calc(var(--primary-b) - 30), 1);
+    --primary-alt2: rgb(calc(var(--primary-r) - 30), calc(var(--primary-g) - 30), calc(var(--primary-b) - 30), 0.85);
+    --primary-alt3: rgb(calc(var(--primary-r) - 30), calc(var(--primary-g) - 30), calc(var(--primary-b) - 30), 0.7);
+    --primary-alt4: rgb(calc(var(--primary-r) - 30), calc(var(--primary-g) - 30), calc(var(--primary-b) - 30), 0.55);
+    --primary-alt5: rgb(calc(var(--primary-r) - 30), calc(var(--primary-g) - 30), calc(var(--primary-b) - 30), 0.4);
+}
+
+/* Setting accent color variable */
+.emby-checkbox:checked + span + .checkboxOutline,
+.selectionCommandsPanel,
+.countIndicator,
+progress[aria-valuenow]:before {
+    background: var(--primary-accent-color) !important;
+}
+progress::-moz-progress-bar {
+    background: var(--primary-accent-color) !important;
+}
+progress::-webkit-progress-value {
+    background: var(--primary-accent-color) !important;
+}
+.emby-checkbox:checked + span + .checkboxOutline,
+.emby-checkbox:focus:not(:checked) + span + .checkboxOutline,
+.emby-input:focus,
+.emby-textarea:focus,
+.emby-select-withcolor:focus,
+.mdl-spinner__layer-1,
+.mdl-spinner__layer-2,
+.mdl-spinner__layer-3,
+.mdl-spinner__layer-4,
+.progressring-spiner {
+    border-color: var(--primary-accent-color) !important;
+}
+.page:not(.itemDetailPage) .button-link,
+.selectLabelFocused,
+.textareaLabelFocused,
+.inputLabelFocused,
+.emby-tab-button:hover,
+.metadataSidebarIcon,
+.upNextDialog-countdownText,
+.listItemImageButton:hover,
+.button-flat:hover,
+#divRunningTasks span {
+    color: var(--primary-accent-color) !important;
+}
+@media (hover: hover) and (pointer: fine) {
+    .paper-icon-button-light:hover:not(:disabled) {
+        color: var(--primary-accent-color) !important;
+        background-color: var(--secondary-accent-color) !important;
+    }
+}
+/* Dynamic colors for default cards */
+.defaultCardBackground1 {
+    background-color: var(--primary-alt1) !important;
+}
+.defaultCardBackground2 {
+    background-color: var(--primary-alt2) !important;
+}
+.defaultCardBackground3 {
+    background-color: var(--primary-alt3) !important;
+}
+.defaultCardBackground4 {
+    background-color: var(--primary-alt4) !important;
+}
+.defaultCardBackground5 {
+    background-color: var(--primary-alt5) !important;
+}
+/* Background colors */
+.noBackdropTransparency .detailPagePrimaryContainer,
+.noBackdropTransparency .detailPageSecondaryContainer {
+    background-color: var(--primary-background-color) !important;
+}
+
+/* Increase size of Jellyfin logo */
+.layout-desktop .pageTitleWithLogo {
+    margin-left: 25px !important;
+    height: 40px !important;
+}
+
+/* Fix for empty header with padding */
+[dir="ltr"] .pageTitle:not(.pageTitleWithLogo):empty {
+    margin: 0 !important;
+}
+
+/* Static left drawer */
+.layout-desktop .mainDrawer {
+    left: 0 !important;
+    top: 0 !important;
+    width: 250px !important;
+    /* Modified background color */
+    background: var(--secondary-background-color) !important;
+    /* Move drawer behind header */
+    z-index: 998 !important;
+}
+/* Lower drawer buttons */
+.layout-desktop .mainDrawer-scrollContainer {
+    margin-top: 95px !important;
+    margin-left: 10px !important;
+}
+.layout-mobile .mainDrawer-scrollContainer {
+    margin-top: 15px !important;
+}
+/* Shift content to the right */
+.layout-desktop .libraryPage {
+    margin-left: 250px !important;
+}
+/* Fix for Jellyfin Media Player */
+.quickConnectSettingsContainer {
+    margin-left: 250px !important;
+}
+/* Hide transition on page load */
+.layout-desktop .touch-menu-la.transition {
+    transition: none !important;
+}
+/* Hide hamburger button */
+.layout-desktop .mainDrawerButton {
+    display: none !important;
+}
+/* Hide home button */
+.layout-desktop .headerHomeButton {
+    display: none !important;
+}
+/* Fix for video player and login page */
+.layout-desktop .hide-scroll .mainDrawer,
+.layout-desktop .hideMainDrawer .mainDrawer {
+    left: -320px !important;
+}
+/* Fix for collection items misalignment */
+.layout-desktop .collectionItems .collectionItemsContainer {
+    padding-left: 0% !important;
+}
+.layout-desktop .collectionItems .sectionTitleContainer {
+    padding-left: 0% !important;
+}
+/* Dynamic buttons */
+.layout-desktop .navMenuOption:hover:not(.navMenuOption-selected) {
+    transform: scale(1.05) !important;
+}
+.layout-desktop .listItem {
+    transition: .2s !important;
+    border-radius: var(--rounded-cards) !important;
+}
+.layout-desktop #myPreferencesMenuPage .listItem:hover {
+    transform: scale(1.015);
+}
+
+
+
+/* Rounded cards */
+.cardContent,
+.cardPadder,
+.cardOverlayContainer,
+.blurhash-canvas,
+.dialog,
+.itemSelectionPanel,
+.nowPlayingPageImage {
+    border-radius: var(--rounded-cards) !important;
+}
+/* Rounded selection menu */
+.itemSelectionPanel {
+    border: 2px solid var(--primary-accent-color) !important;
+}
+.itemSelectionPanel .checkboxOutline {
+    margin: 7px !important;
+}
+
+
+
+/* Floating progress bar */
+.innerCardFooter {
+    border-radius: var(--rounded-cards) !important;
+    margin-left: 5px !important;
+    margin-bottom: 5px !important;
+    padding: 5px 15px 5px 5px !important;
+    bottom: 0% !important;
+    background: rgba(0,0,0,0.5) !important;
+    backdrop-filter: blur(var(--blur)) !important;
+}
+.fullInnerCardFooter {
+    bottom: 5% !important;
+    width: 90% !important;
+    margin: auto !important;
+    border-radius: 100px !important;
+    padding: 0px !important;
+    backdrop-filter: none !important;
+}
+.itemProgressBar:not(.playbackProgress):not(.transcodingProgress):not(.backgroundProgress) {
+    height: 10px !important;
+    background: var(--primary-background-transparent) !important;
+    backdrop-filter: blur(2px) !important;
+    border-radius: 100px !important;
+}
+.innerCardFooterClear {
+    background-color: none !important;
+}
+.innerCardFooter .cardText {
+    padding: 0 0 0 10px !important
+}
+.cardImageContainer .innerCardFooter .itemProgressBar .itemProgressBarForeground {
+    background: var(--primary-accent-color) !important;
+}
+
+
+
+/* Green watched indicator */
+.playedIndicator {
+    background: #409843 !important;
+}
+
+
+
+/* Rounded left drawer buttons */
+.navMenuOption,
+.navMenuOption:hover,
+.navMenuOption-selected {
+    border-radius: 100px !important;
+    width: 85% !important;
+    margin: auto !important;
+    text-align: center !important;
+    height: 45px !important;
+    margin-top: 3px !important;
+    margin-bottom: 3px !important;
+}
+.navMenuOption:hover:not(.navMenuOption-selected) {
+    background-color: rgba(44, 44, 44, 0.7);
+}
+/* Center icons and text and shift to the left */
+.navMenuOptionIcon,
+.navMenuOptionText {
+    position: inherit !important;
+    left: -10% !important;
+    margin-top: 0 !important;
+}
+/* Fix for header buttons */
+.layout-desktop .emby-button-foreground {
+    top: -9px !important;
+}
+.layout-tv .emby-button-foreground {
+    top: -14px !important;
+}
+
+
+
+/* Custom button color */
+.navMenuOption-selected {
+    background: var(--secondary-accent-color) !important;
+    color: var(--primary-accent-color) !important;
+}
+
+/* Modified background color */
+html,
+.backgroundContainer:not(.withBackdrop):not(.backgroundContainer-transparent),
+.noBackdropTransparency .detailPageSecondaryContainer {
+    background-color: var(--primary-background-color) !important;
+}
+
+
+/* Transparent header bar */
+.skinHeader {
+    background-color: transparent !important;
+}
+.layout-desktop .skinHeader,
+.layout-tv .skinHeader {
+    padding-top: 1.5em !important;
+}
+.layout-tv .skinHeader {
+    padding-bottom: 10px !important;
+}
+/* Rounded header buttons */
+.headerTabs,
+.headerRight {
+    background-color: var(--primary-background-transparent) !important;
+    border-radius: 50px !important;
+    backdrop-filter: blur(var(--blur)) !important;
+}
+.layout-desktop .headerTabs,
+.layout-tv .headerTabs {
+    margin-bottom: 10px !important;
+}
+.layout-desktop .headerTabs {
+    margin-left: 160px !important;
+    margin-top: -58px !important;
+}
+/* Button height */
+.headerRight,
+.emby-tab-button {
+    height: 45px !important;
+}
+/* Lower header and add padding to right buttons */
+.layout-desktop .headerRight {
+    padding: 0px 5px !important;
+}
+.layout-tv .headerRight {
+    padding: 20px 10px !important;
+}
+/* Move left header back up */
+.layout-desktop .headerLeft
+.layout-tv .headerLeft {
+    position: relative !important;
+    top: -17px !important;
+}
+/* Mobile fixes */
+.layout-mobile .sectionTabs {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    width: auto !important;
+    max-width: 100% !important;
+}
+.layout-mobile .emby-button-foreground {
+    top: -2px !important;
+}
+.layout-mobile .skinHeader {
+    transition: .1s !important;
+}
+.layout-mobile .mainDrawer {
+    background: var(--secondary-background-color) !important;
+}
+.layout-mobile .headroom--unpinned {
+    transform: none;
+}
+.layout-mobile .headroom--unpinned:has(.headerTabs.sectionTabs > :not(.hide))  {
+    transform: translateY(-50%);
+}
+.layout-mobile .headroom--not-top {
+    background: var(--primary-background-transparent) !important;
+    backdrop-filter: blur(var(--blur)) !important;
+}
+.layout-mobile .headroom--not-top .headerRight {
+    background: none !important;
+    backdrop-filter: none !important;
+}
+.layout-mobile .headroom--top,
+.layout-mobile .headroom--not-top:has(.headerTabs.sectionTabs > :not(.hide)) {
+    background: transparent !important;
+    backdrop-filter: none !important;
+}
+.layout-mobile .headroom--top .headerRight ,
+.layout-mobile .headroom--not-top:has(.headerTabs.sectionTabs > :not(.hide)) .headerRight {
+    background: var(--primary-background-transparent) !important;
+    backdrop-filter: blur(var(--blur)) !important;
+}
+@media (max-width: 380px) {
+    .layout-mobile .pageTitle:not(.pageTitleWithLogo):not(:empty) {
+        position: absolute !important;
+        margin-left: 50% !important;
+        transform: translate(-50%, 0) !important;
+        top: 60px !important;
+    }
+    .layout-mobile .headerTop:has(.pageTitle:not(.pageTitleWithLogo):not(:empty)) {
+        -webkit-align-items: start !important;
+        align-items: start !important;
+    }
+    .layout-mobile .skinHeader:has(.pageTitle:not(.pageTitleWithLogo):not(:empty)) {
+        height: 110px !important;
+    }
+    .layout-mobile .skinHeader:has(.pageTitle:not(.pageTitleWithLogo):not(:empty)):has(.sectionTabs:not(.hide)) {
+        height: 140px !important;
+    }
+    .layout-mobile .libraryPage:not(.noSecondaryNavPage) {
+        padding-top: 9.5em !important;
+    }
+    .layout-mobile .headroom--unpinned:has(.headerTabs.sectionTabs > :not(.hide)):has(.pageTitle:not(.pageTitleWithLogo):not(:empty)) {
+        transform: translateY(-60%);
+    }
+}
+
+
+
+/* Player modifications */
+.upNextContainer:not(#skipIntro), .toastVisible {
+    backdrop-filter: blur(var(--blur)) !important;
+}
+.upNextContainer:not(#skipIntro) {
+    border-radius: var(--rounded-cards) !important;
+    background-color: rgba(0, 0, 0, 0.6) !important;
+}
+.upNextContainer {
+    margin: 4% !important;
+}
+.toastVisible {
+    border-radius: 30px !important;
+    background-color: var(--primary-background-transparent) !important;
+}
+.sliderBubble {
+    border-radius: var(--rounded-cards) !important;
+    background-color: var(--secondary-background-transparent) !important;
+    backdrop-filter: blur(var(--blur)) !important;
+}
+.sliderBubble:not(.osdVolumeSliderContainer .sliderBubble):has(.chapterThumbContainer) {
+    background-color: #ffffff00 !important;
+    top: 25px !important;
+    backdrop-filter: unset !important;
+}
+@supports selector(div:not(.parent .child)) {
+    .mdl-slider-background-flex:not(.layout-mobile .nowPlayingBar .mdl-slider-background-flex) {
+        height: 10px !important;
+        margin-top: -5px !important;
+        border-radius: 100px !important;
+        background: hsla(0,0%,100%,.2) !important;
+    }
+}
+@supports not selector(div:not(.parent .child)) {
+    .mdl-slider-background-flex {
+        height: 10px !important;
+        margin-top: -5px !important;
+        border-radius: 100px !important;
+        background: hsla(0,0%,100%,.2) !important;
+    }
+}
+.mdl-slider-background-lower {
+    border-radius: 100px !important;
+    background-color: var(--primary-accent-color) !important;
+}
+/* Moz */
+.mdl-slider::-moz-range-thumb {
+    background: #ffffff00 !important;
+    height: 10px !important;
+    width: 8px !important;
+    border-radius: 2px !important;
+}
+.mdl-slider-hoverthumb:hover::-moz-range-thumb,
+.mdl-slider-hoverthumb:focus::-moz-range-thumb {
+    transform: scaleY(2) !important;
+    background: #fff !important;
+}
+/* Webkit */
+.mdl-slider::-webkit-slider-thumb {
+    background: #ffffff00 !important;
+    height: 10px !important;
+    width: 8px !important;
+    border-radius: 2px !important;
+}
+.mdl-slider-hoverthumb:hover::-webkit-slider-thumb,
+.mdl-slider-hoverthumb:focus::-webkit-slider-thumb {
+    transform: scaleY(2) !important;
+    background: #fff !important;
+}
+
+.mdl-slider-background-upper {
+    border-top-right-radius: 100px !important;
+    border-bottom-right-radius: 100px !important;
+    background: hsla(0,0%,100%,.2) !important;
+    transform: translateX(-3px) !important;
+}
+.iconOsdProgressInner {
+    background: var(--primary-accent-color) !important;
+}
+
+/* Up next card */
+.upNextDialog-buttons .upNextDialog-button {
+    transition: .2s !important;
+}
+.upNextDialog-buttons .upNextDialog-button:hover {
+    transform: scale(1.1);
+}
+
+/* Support for Jellyscrub plugin */
+.chapterThumbContainer {
+    background: none !important;
+    border-radius: var(--rounded-cards) !important;
+    box-shadow: unset !important;
+}
+.chapterThumb {
+    border-radius: var(--rounded-cards) !important;
+    margin-bottom: 47px !important;
+    box-shadow: 0 0 1.9vh #000 !important;
+}
+.chapterThumbTextContainer {
+    background: none !important;
+}
+.chapterThumbText {
+    text-align: center !important;
+}
+.chapterThumbText-dim {
+    display: none !important;
+}
+
+/* Support for IntroSkipper plugin */
+#skipIntro .btnSkipIntro {
+    transition: 0.2s;
+    border-radius: 100px !important;
+    backdrop-filter: blur(var(--blur)) !important;
+}
+#skipIntro .btnSkipIntro:hover {
+    transition: .2s;
+    transform: scale(1.05);
+    background: var(--primary-accent-color) !important;
+}
+#skipIntro .paper-icon-button-light:hover:not(:disabled) {
+    color: #FFF !important;
+}
+.sliderContainer:has(.mdl-slider-hoverthumb) .sliderMarker {
+    opacity: 0 !important;
+    transition: 0.2s !important;
+}
+.sliderContainer:has(.mdl-slider-hoverthumb:hover) .sliderMarker,
+.sliderContainer:has(.mdl-slider-hoverthumb:focus) .sliderMarker  {
+    opacity: 1 !important;
+    transition: 0.2s !important;
+    height: 10px !important;
+    transform: translate3d(0,40%,0) !important;
+    -webkit-transform: translate3d(0,40%,0) !important;
+}
+.sliderMarker.watched {
+    background-color: #FFFFFF90 !important;
+    z-index: 10 !important;
+}
+#skipIntro .upNextContainer {
+    padding: 0px !important;
+}
+#skipIntro .emby-button {
+    background: rgba(30, 30, 30, 0.7) !important;
+}
+#skipIntro .emby-button:hover {
+    box-shadow: 0 0 8px rgba(var(--primary-accent-color), 0.6) !important;
+}
+#skipIntro .emby-button:focus {
+    background: rgba(30, 30, 30, 0.7) !important;
+    box-shadow: unset !important;
+}
+/* Support for InPlayerEpisodePreview plugin */
+.layout-desktop #popupFocusContainer {
+    padding: 10px !important;
+}
+.layout-desktop #popupTitleContainer {
+    margin: 0px !important;
+    padding: 10px 0px 10px 0px !important;
+}
+.layout-desktop #popupContentContainer .previewEpisodeDetails {
+    position: unset !important;
+    margin: 0px 0px 6px 10px !important;
+    font-size: 13.5px !important;
+}
+.layout-desktop #popupContentContainer .previewEpisodeTitle {
+    font-size: 16.5px !important;
+}
+.layout-desktop #popupContentContainer .listItem {
+    padding: .25em .25em .25em .5em !important;
+}
+
+/* Modify player buttons */
+.material-icons.fast_rewind::before {
+    content: "\e059";
+}
+.material-icons.fast_forward::before {
+    content: "\e057";
+}
+.material-icons.audiotrack::before {
+    content: "\e91f";
+}
+
+
+
+/* Settings modifications */
+.emby-input,
+.emby-textarea,
+.paperList,
+.listItem:hover,
+.subtitleappearance-preview {
+    border-radius: var(--rounded-cards) !important;
+}
+.button-submit,
+.emby-select,
+.checkboxOutline,
+.emby-button.raised {
+    border-radius: 100px !important;
+}
+.button-submit {
+    background: var(--primary-accent-color) !important;
+}
+/* Modify username placement on profile page */
+.layout-desktop #userProfilePage .readOnlyContent div:not([class]), div[class=""]{
+    align-items: initial !important;
+}
+.layout-desktop .username {
+    margin: 0px 0px 10px 10px !important;
+}
+/* Remove border under certain dashboard items */
+.listItem-border {
+    border: 0 !important;
+}
+/* Add padding to list items */
+.layout-desktop .listItem,
+.layout-tv .listItem {
+    padding-inline: 15px !important;
+}
+/* Center the Quick Connect page */
+.layout-desktop #quickConnectPreferencesPage form {
+    margin: auto;
+}
+/* Theme icons for certain list objects */
+.listItemIcon:not(.listItemIcon-transparent):not(.notification_important) {
+    background: var(--secondary-accent-color) !important;
+    color: var(--primary-accent-color) !important;
+}
+
+
+
+/* Resize show/movie image on details page */
+.layout-desktop .detailImageContainer .card {
+    top: 1.8em !important;
+    width: 18.3vw !important;
+    position: static !important;
+    margin-bottom: 0 !important;
+}
+
+/* Re-position content on details page */
+.layout-desktop .detailPageContent {
+    padding-left: 3.3% !important;
+    padding-right: 0 !important;
+}
+
+/* Re-position logo */
+.layout-desktop .detailLogo,
+.layout-tv .detailLogo {
+    right: 0 !important;
+    left: 4% !important;
+    top: 10% !important;
+}
+
+/* Transparent ribbon bar */
+.detailRibbon {
+    background: transparent !important;
+}
+
+/* Add card around top-right buttons */
+.mainDetailButtons {
+    background: var(--primary-background-transparent) !important;
+    border-radius: 100px !important;
+    backdrop-filter: blur(var(--blur)) !important;
+}
+
+/* Add card around groups section */
+.layout-desktop .detailsGroupItem {
+    background: var(--secondary-background-color) !important;
+    padding: 10px 20px !important;
+    border-radius: 20px !important;
+    width: fit-content !important;
+    max-width: max-content !important;
+    display: flex;
+    gap: 1em;
+}
+
+/* Fix for group section labels */
+.detailsGroupItem .label, .trackSelections .selectContainer .selectLabel {
+    min-width: 75px;
+    flex-basis: unset;
+    margin: unset;
+}
+
+/* Mobile media details page */
+.layout-mobile .itemDetailsGroup:has(> :not(.hide)) {
+    background: var(--secondary-background-color) !important;
+    padding: 15px 20px 5px 20px !important;
+    border-radius: var(--rounded-cards) !important;
+}
+.layout-mobile .detailPagePrimaryContent .itemsContainer.scrollX,
+.layout-mobile .detailPageSecondaryContainer .emby-scroller  {
+    margin-inline: -5% !important;
+    padding-inline: 5% !important;
+}
+.layout-mobile .detailSection {
+    display: flex !important;
+}
+.layout-mobile .detailSection {
+    display: flex;
+    flex-direction: column;
+}
+.layout-mobile .detailSection .detailSectionContent {
+    order: 1;
+}
+.layout-mobile .detailSection .recordingFields {
+    order: 2;
+}
+.layout-mobile .detailSection .trackSelections {
+    order: 3;
+}
+.layout-mobile .detailSection .itemDetailsGroup {
+    order: 4;
+}
+.layout-mobile .detailSection .nextUpSection {
+    padding-top: 15px !important;
+    order: 5;
+}
+.layout-mobile .detailSection #listChildrenCollapsible {
+    order: 6;
+}
+
+/* Add card around description */
+.layout-desktop .detailSectionContent {
+    background: var(--secondary-background-color) !important;
+    border-radius: var(--rounded-cards) !important;
+    padding: 40px 20px 10px 20px !important;
+    margin-top: 44px !important;
+}
+@supports selector(:has(*)) {
+    .layout-desktop .detailPageWrapperContainer:not(:has(.itemMiscInfo-primary .mediaInfoItem)) .detailSectionContent {
+        padding: 0px 20px 10px 20px !important;
+    }
+}
+.layout-mobile .detailSectionContent {
+    background: var(--secondary-background-color) !important;
+    border-radius: var(--rounded-cards) !important;
+    padding: 0px 20px 10px 20px !important;
+}
+/* Fix content shifting when clicking "Show more" on a long description */
+.detailSectionContent .overview {
+    display: -webkit-box !important;
+}
+
+/* Add card around track selection */
+.trackSelections {
+    background: var(--secondary-background-color) !important;
+    border-radius: var(--rounded-cards) !important;
+    padding: 10px 20px !important;
+    margin-top: 20px !important;
+}
+
+/* Fix for track select dropdowns */
+.trackSelections .selectContainer .detailTrackSelect {
+    padding: 0 10px;
+    margin-left: 10px !important;
+}
+
+/* Re-position title */
+.layout-desktop .infoWrapper {
+    margin-top: 245px !important;
+    margin-left: 20.9vw !important;
+}
+.layout-desktop .detailPagePrimaryContainer {
+    padding-left: 3.3% !important;
+}
+/* Fix for title position on 10.11.X */
+.layout-desktop [dir="ltr"] .detailPagePrimaryContainer:not(.detailRibbon) .detailRibbon {
+    padding-left: unset !important;
+}
+.layout-desktop .nameContainer {
+    position: absolute !important;
+    margin-top: -48px !important;
+}
+.layout-desktop .itemMiscInfo {
+    position: absolute !important;
+    margin-left: 12px !important;
+    margin-top: 16px !important;
+}
+
+
+
+/* Media detail page */
+/* Change page layout to grid */
+.layout-desktop .detailPageWrapperContainer .detailPagePrimaryContainer {
+    display: grid;
+    grid-template-areas:
+        "ribbon   ribbon"
+        "image    scontent"
+        "image    tselection"
+        "image    igroup"
+        "nextup   nextup"
+        "children children"
+        "citems   citems"
+        "pguide   pguide";
+
+    grid-template-rows:
+        auto
+        max-content
+        auto
+        1fr
+        auto
+        auto
+        auto
+        auto;
+
+    grid-template-columns: minmax(auto, 18.3vw) 1fr;
+}
+.layout-desktop .detailPageWrapperContainer .detailPagePrimaryContent,
+.layout-desktop .detailPageWrapperContainer .detailSection {
+    display: contents;
+}
+.layout-desktop .detailPageWrapperContainer .detailRibbon {
+    grid-area: ribbon;
+    margin-bottom: 25px !important;
+}
+.layout-desktop .detailPageWrapperContainer .detailImageContainer {
+    grid-area: image;
+    margin-bottom: 1.3vw !important;
+}
+.layout-desktop .detailPageWrapperContainer .detailSectionContent {
+    grid-area: scontent;
+    margin-right: max(env(safe-area-inset-right),3.3%) !important;
+}
+.layout-desktop .detailPageWrapperContainer .trackSelections {
+    grid-area: tselection;
+}
+.layout-desktop .detailPageWrapperContainer .itemDetailsGroup {
+    grid-area: igroup;
+}
+.layout-desktop .detailPageWrapperContainer .detailSectionContent,
+.layout-desktop .detailPageWrapperContainer .trackSelections,
+.layout-desktop .detailPageWrapperContainer .itemDetailsGroup {
+    margin-left: 2.1vw !important;
+    align-self: start;
+}
+.layout-desktop .detailPageWrapperContainer .nextUpSection {
+    grid-area: nextup;
+}
+.layout-desktop .detailPageWrapperContainer #listChildrenCollapsible {
+    grid-area: children;
+}
+.layout-desktop .detailPageWrapperContainer .collectionItems {
+    grid-area: citems;
+}
+.layout-desktop .detailPageWrapperContainer .programGuideSection {
+    grid-area: pguide;
+}
+/* Move episode title */
+.layout-desktop .nameContainer {
+    display: flex;
+    flex-direction: row;
+}
+.layout-desktop .nameContainer .parentName {
+    order: 1;
+}
+.layout-desktop .nameContainer .itemName {
+    order: 2;
+}
+/* Modify original title / episode name position */
+.layout-desktop .nameContainer .itemName.originalTitle {
+    margin: .5em 20px !important;
+}
+.layout-desktop .nameContainer .itemName.infoText.subtitle {
+    margin: .5em 20px !important;
+    padding: 0px !important;
+}
+/* Modify play button */
+.layout-desktop .mainDetailButtons .btnPlay::after {
+    content: "Play" !important;
+}
+.layout-desktop .mainDetailButtons .btnPlay {
+    position: relative !important;
+    margin-right: -85px !important;
+    padding-right: 20px !important;
+    right: 110px !important;
+    background: var(--primary-accent-color) !important;
+    border-radius: 100px !important;
+    color: var(--secondary-background-color) !important;
+}
+.layout-desktop .mainDetailButtons .detailButton {
+    -webkit-flex-direction: row !important;
+    flex-direction: row !important;
+}
+/* Change crop for list item images */
+.listItemImage {
+    background-size: contain !important;
+    border-radius: var(--rounded-cards);
+}
+/* Move up content if no backdrop image is present */
+@supports selector(:has(*)) {
+    .layout-desktop:not(:has(.backdropContainer .backdropImage, .detailLogo)) #itemBackdrop {
+        height: 165px !important;
+    }
+
+    .layout-desktop:not(:has(.backdropContainer .backdropImage, .detailLogo)) .mainDetailButtons {
+        margin-top: 70px !important;
+    }
+}
+
+/* Chapter selector labels */
+.layout-desktop .chapterCard .innerCardFooter {
+    display: flex !important;
+    flex-direction: row !important;
+    padding: 3px 15px 5px 5px !important
+}
+
+
+
+/* Live TV */
+/* Modified background color of active guide cells */
+.programCell-active {
+    background: var(--secondary-background-color) !important;
+}
+/* Repositioned record button */
+.recordingFields {
+    margin: 5px 0 -7px 0 !important;
+}
+.recordingButton {
+    height: 40px !important;
+}
+.recordingIcon {
+    color: red !important;
+}
+/* Remove overlapping text */
+.itemMiscInfo.itemMiscInfo-secondary {
+    margin-left: 65px !important;
+}
+
+
+
+/* Music Player */
+.layout-desktop .appfooter:has(.nowPlayingBar:not(.hide)) {
+    border-radius: var(--rounded-cards);
+    margin: 15px 15px 10px 265px;
+    padding: 5px;
+    background: var(--tertiary-background-transparent);
+    backdrop-filter: blur(var(--blur));
+}
+.layout-desktop .appfooter .nowPlayingBarInfoContainer {
+    margin-left: 10px !important;
+}
+.layout-desktop .volumeOsd {
+    border-radius: var(--rounded-cards) !important;
+    background: var(--secondary-background-transparent) !important;
+}
+.layout-desktop .nameContainer .musicParentName {
+    margin-top: 18px !important;
+    margin-right: 22px !important;
+}
+.layout-desktop .appfooter .nowPlayingBar {
+    margin-top: 20px !important;
+}
+.layout-desktop .appfooter .nowPlayingBar .nowPlayingBarPositionContainer {
+    top: -15px !important;
+}
+/* Shift page up so now-playing footer doesn't block anything */
+.layout-desktop:has(.nowPlayingBar:not(.hide)) .content-primary,
+.layout-desktop:has(.nowPlayingBar:not(.hide)) .padded-bottom-page,
+.layout-desktop:has(.nowPlayingBar:not(.hide)) .page,
+.layout-desktop:has(.nowPlayingBar:not(.hide)) .pageWithAbsoluteTabs .pageTabContent {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 8em) !important;
+}
+
+/* Fix album list alignment on artist page */
+.layout-mobile div[data-type="MusicAlbum"] .itemsContainer {
+    padding-right: 0 !important;
+    gap: 0 1.2em !important;
+}
+.layout-mobile div[data-type="MusicAlbum"] .itemsContainer .overflowSquareCard {
+    width: 42.9vw !important;
+}
+.layout-mobile div[data-type="MusicAlbum"] .itemsContainer .overflowSquareCard .cardBox {
+    margin-right: 0 !important;
+}
+
+
+
+/* Display size scaling */
+@media (width: 1600px) {
+    .layout-desktop .headerRight {
+        margin-bottom: 0 !important;
+    }
+    .layout-desktop .emby-button-foreground {
+        top: -4px !important;
+    }
+}
+@media (max-width: 1599px) {
+    .layout-desktop .pageTitleWithLogo {
+        margin-left: 25px !important;
+    }
+    .layout-desktop .headerTabs {
+        margin-top: -65px !important;
+    }
+    .layout-desktop .headerRight {
+        margin-right: 15px !important;
+    }
+    .layout-desktop .sectionTabs {
+        width: auto !important;
+        align-self: center !important;
+    }
+    .layout-desktop .emby-button-foreground {
+        top: -2px !important;
+    }
+}
+
+
+
+/* Fixes for TV Layout */
+.layout-tv .sectionTabs {
+    width: auto !important;
+}
+.layout-tv .headerLeft {
+    padding: 5px !important;
+}
+
+
+
+/* Login page */
+.layout-desktop #loginPage {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+/* Login box */
+.layout-desktop #loginPage .padded-left.padded-right.padded-bottom-page.margin-auto-y {
+    background: var(--secondary-background-color) !important;
+    width: 450px !important;
+    border-radius: 25px !important;
+    padding: 3em !important;
+}
+/* Forgot password button */
+.layout-desktop #loginPage .readOnlyContent {
+    position: relative !important;
+}
+.layout-desktop #loginPage .btnForgotPassword {
+    transition: none !important;
+}
+.layout-desktop #loginPage .readOnlyContent:has(.btnManual.hide) .btnForgotPassword {
+    background: none !important;
+    font-weight: normal !important;
+    width: 150px !important;
+    position: absolute !important;
+    margin-left: 320px !important;
+    top: -200px !important;
+    font-size: smaller !important;
+    color: rgba(255, 255, 255, 0.5) !important;
+    z-index: 1 !important;
+    transition: none !important;
+}
+/* Move "forgot password" button if the "cancel" button is hidden */
+.layout-desktop #loginPage:has(.manualLoginForm .btnCancel.hide) .readOnlyContent:has(.btnManual.hide) .btnForgotPassword {
+    top: -146px !important;
+}
+/* User cards */
+.layout-desktop #loginPage .squareCard {
+    width: 25% !important;
+    font-size: smaller !important;
+}
+.layout-desktop #loginPage .squareCard .cardBox {
+    margin-inline: 0.6em !important;
+}
+/* Scaling */
+@media (max-width: 100em) {
+    .layout-desktop #loginPage .squareCard {
+        width: 20% !important;
+    }
+    .layout-desktop #loginPage .padded-left.padded-right.padded-bottom-page.margin-auto-y {
+        width: 600px !important;
+    }
+    .layout-desktop #loginPage .readOnlyContent:has(.btnManual.hide) .btnForgotPassword {
+        margin-left: 470px !important;
+    }
+}
+@media (max-width: 87.5em) {
+    .layout-desktop #loginPage .squareCard {
+        width: 20% !important;
+    }
+}
+@media (max-width: 75em) {
+    .layout-desktop #loginPage .squareCard {
+        width: 20% !important;
+    }
+}
+@media (max-width: 43.75em) {
+    .layout-desktop #loginPage .squareCard {
+        width: 20% !important;
+    }
+}
+
+
+
+/* Dialog box */
+.dialog {
+    background-color: var(--secondary-background-color) !important;
+}
+.actionSheetTitle {
+    margin: 10px 20px !important;
+}
+
+
+
+/* Dynamic backdrop support */
+
+/* Translucent cards */
+.layout-desktop #itemDetailPage:not(.noBackdropTransparency) .detailsGroupItem,
+.layout-desktop #itemDetailPage:not(.noBackdropTransparency) .detailSectionContent,
+.layout-desktop #itemDetailPage:not(.noBackdropTransparency) .trackSelections {
+    background: var(--primary-background-transparent) !important;
+    backdrop-filter: blur(var(--blur)) !important;
+}
+
+/* Transparent drawer */
+.layout-desktop .backgroundContainer.withBackdrop + div .mainDrawer {
+    background: linear-gradient(to right, #10101090, transparent) !important;
+}
+.layout-desktop:has(#itemDetailPage.noBackdropTransparency) .mainDrawer {
+    background: var(--secondary-background-color) !important;
+}
+/* Fix for JMP */
+@supports not selector(:has(*)) {
+    .layout-desktop .backgroundContainer.withBackdrop + div .mainDrawer {
+        background: transparent !important;
+    }
+    .layout-desktop #itemDetailPage.noBackdropTransparency::after {
+        position: fixed;
+        content: "";
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 250px;
+        background: var(--secondary-background-color);
+    }
+}
+
+/* Blur buttons */
+.layout-desktop:has(.backgroundContainer.withBackdrop) .navMenuOption-selected {
+    backdrop-filter: blur(var(--blur)) !important;
+}
+.layout-desktop:has(.backgroundContainer.withBackdrop) .navMenuOption:hover:not(.navMenuOption-selected) {
+    background: var(--primary-background-transparent) !important;
+    backdrop-filter: blur(var(--blur)) !important;
+}
+
+
+
+/* Plugin support */
+
+/* Media Bar */
+#slides-container {
+    margin: 125px 50px 0 300px !important;
+    width: auto !important;
+    border-radius: var(--rounded-cards) !important;
+    height: 58% !important;
+}
+#slides-container .backdrop-container,
+#slides-container .backdrop-overlay,
+#slides-container .backdrop,
+#slides-container .gradient-overlay {
+    mask-image: none !important;
+    -webkit-mask-image: none !important;
+}
+#slides-container .pause-button {
+    top: 1rem !important;
+}
+#slides-container .logo-container {
+    top: 8vh !important;
+}
+/* Scaling */
+@media only screen and (max-height: 767px) and (orientation: landscape) {
+    .layout-desktop #slides-container {
+        height: 50% !important;
+    }
+    .layout-desktop #slides-container .logo-container {
+        top: 10% !important;
+    }
+    .layout-desktop #slides-container .info-container {
+        top: calc(50% + -4vh) !important;
+    }
+    .layout-desktop #slides-container .genre {
+        top: calc(50% + 1vh) !important;
+    }
+    .layout-desktop #slides-container .button-container {
+        top: calc(50% + 15vh) !important;
+    }
+}
+/* Mobile styling */
+.layout-mobile #slides-container {
+    margin: 120px 3.3% 0 3.3% !important;
+    height: calc(51vh + 7.5em) !important;
+}
+@media only screen and (max-width: 767px) and (orientation: portrait) {
+    .layout-mobile #slides-container .logo-container {
+        top: 50% !important;
+    }
+    .layout-mobile #slides-container .button-container {
+        top: calc(50% + 23vh) !important;
+    }
+}

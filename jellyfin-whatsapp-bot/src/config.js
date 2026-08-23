@@ -14,6 +14,12 @@ const config = {
     botToken: process.env.BOT_ADMIN_TOKEN || '',
   },
 
+  systemUpdate: {
+    socketPath: process.env.UPDATE_BROKER_SOCKET || '/run/media-update/broker.sock',
+    secretFile: process.env.UPDATE_BROKER_SECRET_FILE || '/app/auth/update-broker.secret',
+    timeoutMs: parseInt(process.env.UPDATE_BROKER_TIMEOUT_MS, 10) || 300000,
+  },
+
   webhooks: {
     uptimeKumaSecret: process.env.UPTIME_KUMA_SECRET || '',
   },

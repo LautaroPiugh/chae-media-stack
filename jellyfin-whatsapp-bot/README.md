@@ -129,6 +129,8 @@ Enviá estos comandos por WhatsApp:
 | `/catalogo [tipo]` | Catálogo completo de películas o series |
 | `/faltantes [tipo]` | Faltantes en la biblioteca |
 | `/actualizar [nombre]` | Buscar mejor calidad para contenido existente |
+| `/actualizarsistema` | Validar Git y Docker y generar un código temporal de confirmación |
+| `/actualizarsistema estado` | Consultar la cola de actualización del servidor |
 | `/eliminar [nombre]` | **(admin)** Eliminar de biblioteca + disco + torrents |
 | `/refrescar [nombre]` | **(admin)** Refrescar metadatos + rescan en Sonarr |
 | `/reiniciar` | **(admin)** Reinicia el bot |

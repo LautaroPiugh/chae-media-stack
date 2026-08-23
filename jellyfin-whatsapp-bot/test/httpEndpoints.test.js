@@ -44,6 +44,17 @@ test('/status requires the bot admin token', async () => {
   assert.deepEqual(await authorized.json(), { ok: true, whatsappConnected: false });
 });
 
+test('/update-ready requires the update token', async () => {
+  const unauthorized = await fetch(`${baseUrl}/update-ready`);
+  assert.equal(unauthorized.status, 401);
+
+  const authorized = await fetch(`${baseUrl}/update-ready`, {
+    headers: { 'x-update-token': process.env.WHATSAPP_UPDATE_NOTIFY_TOKEN },
+  });
+  assert.equal(authorized.status, 200);
+  assert.deepEqual(await authorized.json(), { ok: true, whatsappConnected: false });
+});
+
 test('message-triggering HTTP endpoints reject missing tokens', async () => {
   const requests = [
     fetch(`${baseUrl}/test-whatsapp`),

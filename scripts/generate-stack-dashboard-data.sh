@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/stack-dashboard"
 OUTPUT_FILE="$CACHE_DIR/stack-data.json"
 TMP_FILE="$CACHE_DIR/stack-data.json.tmp"
@@ -31,9 +32,13 @@ container_json() {
 
 http_check() {
   local url="$1"
+  local check_url
+  local -a curl_args=(-s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 4)
   [[ -z "$url" ]] && { echo 'false'; return 0; }
   local code
-  code="$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 "$url" 2>/dev/null || true)"
+  check_url="$(sed -E 's#(https?://)[^/:]+#\1127.0.0.1#' <<<"$url")"
+  [[ "$check_url" == https://* ]] && curl_args+=(--insecure)
+  code="$(curl "${curl_args[@]}" "$check_url" 2>/dev/null || true)"
   [[ "$code" =~ ^[0-9]+$ ]] && [[ "$code" -ge 200 && "$code" -lt 500 ]] && { echo 'true'; return 0; }
   echo 'false'
 }
@@ -154,11 +159,11 @@ services_json="$({
   service_json 'Uptime Kuma' 'chae-uptime-kuma' 'http://192.168.1.100:3001' '3001' 'Monitoreo y health checks.' 'monitoring'
   service_json 'Flaresolverr' 'chae-flaresolverr' '' '8191' 'Bypass de Cloudflare para trackers.' 'support'
   service_json 'SubgenAI' 'subgenai' 'http://192.168.1.100:9000' '9000' 'Generacion auxiliar de subtitulos y automatizaciones.' 'support'
-  service_json 'WhatsApp Bot' 'jellyfin-whatsapp-bot' 'http://192.168.1.100:3555' '3555' 'Bot y automatizacion alrededor de Jellyfin.' 'automation'
+  service_json 'WhatsApp Bot' 'jellyfin-whatsapp-bot' '' '3555' 'Bot y automatizacion alrededor de Jellyfin.' 'automation'
   service_json 'Postgres' 'chae-postgres' '' '5432' 'Base de datos interna del stack.' 'database'
   service_json 'Portainer' 'portainer' 'https://192.168.1.100:9443' '9443' 'Administracion de Docker.' 'ops'
   service_json 'Maintainerr' 'chae-maintainerr' 'http://192.168.1.100:8787' '8787' 'Limpieza automatica de contenido.' 'media'
-  service_json 'Watchtower' 'watchtower' '' '' 'Actualiza automaticamente contenedores Docker cada madrugada.' 'ops'
+  service_json 'Watchtower' 'watchtower' '' '' 'Deshabilitado; las actualizaciones se ejecutan bajo demanda con validacion y rollback.' 'ops'
 } | jq -s '.')"
 
 storage_json_all="$({
@@ -208,6 +213,8 @@ jq -n \
   --argjson internalTotal "$internal_total" \
   --argjson mediaFreeBytes "$media_free_bytes" \
   --arg mediaUsage "$media_usage" \
+  --arg dashboardCommand "$SCRIPT_DIR/generate-stack-dashboard-data.sh" \
+  --arg updateCommand "$SCRIPT_DIR/update-media-stack.sh media" \
   --argjson services "$services_json" \
   --argjson storage "$storage_json_all" \
   '{
@@ -265,11 +272,11 @@ jq -n \
       ]
     },
     commands:[
-      {label:"Regenerar datos del dashboard",command:"# Ruta: $(dirname "$0")/generate-stack-dashboard-data.sh",description:"Actualiza el JSON cacheado que consume la portada."},
+      {label:"Regenerar datos del dashboard",command:$dashboardCommand,description:"Actualiza el JSON cacheado que consume la portada."},
       {label:"Ver Tdarr en vivo",command:"docker logs -f chae-tdarr-node",description:"Seguimiento del worker de transcode."},
       {label:"Ver contenedores",command:"docker ps --format \"table {{.Names}}\\t{{.Status}}\\t{{.Ports}}\"",description:"Vista rapida del stack."},
       {label:"Espacio de biblioteca",command:"df -h /mnt/media /mnt/media2/downloads",description:"Confirma espacio libre para media y cache de Tdarr."},
-      {label:"Actualizar stack completo",command:"# Ruta: $(dirname "$0")/update-media-stack.sh media",description:"Actualiza contenedores y refresca el cache del dashboard."}
+      {label:"Previsualizar actualizaciones",command:$updateCommand,description:"Valida la allowlist del stack sin aplicar cambios."}
     ]
   }' > "$TMP_FILE"
 

@@ -133,6 +133,8 @@ Bot personal para administrar el media stack desde WhatsApp. Usa `@whiskeysocket
 | `/catalogo [tipo]` | Catálogo completo de películas o series |
 | `/faltantes [tipo]` | Faltantes en la biblioteca |
 | `/actualizar [nombre]` | Buscar mejor calidad para contenido existente |
+| `/actualizarsistema` | Preparar actualización segura de Git y Docker |
+| `/actualizarsistema estado` | Consultar la cola de actualización |
 | `/eliminar [nombre]` | **(admin)** Eliminar de biblioteca + disco + torrents |
 | `/refrescar [nombre]` | **(admin)** Refrescar metadatos + rescan en Sonarr |
 | `/reiniciar` | **(admin)** Reinicia el bot |
@@ -238,7 +240,7 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 | 10 minutos | `python3 /home/chae/services/bazarr/auto_translate.py` | Traduce subs EN bjados por Bazarr vía Gemini |
 | 6 horas | `python3 /home/chae/scripts/check_es_subs.py` | Verifica y descarga subtítulos ES faltantes |
 | 3am daily | `/home/chae/scripts/backup-stack.sh` | Backup PostgreSQL + configs a `/mnt/media2/backups/stack/` (retención 14 días) |
-| 4am daily | Watchtower (Docker) | Actualiza automáticamente todos los containers |
+| Manual por WhatsApp | `media-update-broker` | Actualiza la allowlist Docker uno por uno y se detiene ante fallos |
 | on-demand | `./scripts/start-stack.sh` | Inicia todos los servicios en orden |
 | on-demand | `./scripts/stop-stack.sh` | Detiene todos los servicios (orden inverso) |
 | on-demand | `./scripts/health-check.sh` | Verifica estado de todos los containers + HTTP + almacenamiento |
@@ -277,7 +279,7 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 2. **Subtítulos**: Cada 6h, script verifica faltantes → OpenSubtitles o DeepL → guarda `.es.srt`
 3. **Notificaciones**: Radarr/Sonarr envían webhook al bot → bot reenvía a WhatsApp
 4. **Transcodificación**: Tdarr procesa archivos automáticamente
-5. **Actualizaciones**: Watchtower actualiza containers cada 4am
+5. **Actualizaciones**: `/actualizarsistema` usa código temporal, backups, health-check y rollback; Watchtower permanece deshabilitado
 6. **Backups**: Diario 3am, Postgres + configs a disco 2, retención 14 días
 
 ---

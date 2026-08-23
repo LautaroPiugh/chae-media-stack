@@ -13,6 +13,7 @@ services:
     volumes:
       - ./auth:/app/auth
       - /mnt/media:/mnt/media:ro
+      - /home/chae/.local/run/chae-media-update:/run/media-update
     environment:
       - NODE_ENV=production
     networks:

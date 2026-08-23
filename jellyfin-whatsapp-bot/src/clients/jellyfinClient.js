@@ -2,7 +2,7 @@ const config = require('../config');
 
 function getHeaders() {
   return {
-    'X-Emby-Token': config.jellyfin.apiKey,
+    Authorization: `MediaBrowser Token="${config.jellyfin.apiKey}"`,
     'Content-Type': 'application/json',
   };
 }
@@ -66,8 +66,22 @@ async function getWatchedMovies() {
   }));
 }
 
+async function deleteJellyfinItem(itemId) {
+  const res = await fetch(`${config.jellyfin.url}/Items/${itemId}`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+  });
+
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`Jellyfin delete error: ${res.status}`);
+  }
+
+  return true;
+}
+
 module.exports = {
   isConfigured,
   getUserLibraryItems,
   getWatchedMovies,
+  deleteJellyfinItem,
 };

@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_DIR="${UPDATE_PROJECT_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 ROOT="$PROJECT_DIR"
+COMPOSE_ROOT="${UPDATE_COMPOSE_ROOT:-$ROOT}"
+COMPOSE_PROJECT_ROOT="${UPDATE_COMPOSE_PROJECT_ROOT:-$COMPOSE_ROOT}"
+ROLLBACK_COMPOSE_ROOT="${UPDATE_ROLLBACK_COMPOSE_ROOT:-$COMPOSE_ROOT}"
 LOG_DIR="$ROOT/logs"
 LOG_FILE="$LOG_DIR/media-stack-update.log"
-STATE_FILE="$HOME/.cache/media-stack-update.state"
+STATE_FILE="${UPDATE_STATE_FILE:-$HOME/.cache/media-stack-update.state}"
+LOCK_FILE="${UPDATE_LOCK_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/chae-media-update/queue.lock}"
+UPDATE_ORCHESTRATED="${UPDATE_ORCHESTRATED:-0}"
 STACK_DASHBOARD_SCRIPT="$ROOT/scripts/generate-stack-dashboard-data.sh"
 HEALTH_CHECK_SCRIPT="$ROOT/scripts/health-check.sh"
 MEDIA_STATUS_SCRIPT="$ROOT/scripts/media-status.sh"
@@ -18,19 +23,21 @@ PORTAINER_IMAGE="${PORTAINER_IMAGE:-portainer/portainer-ce:2.39.5}"
 PORTAINER_BACKUP_FILE="${PORTAINER_BACKUP_FILE:-}"
 WHATSAPP_NOTIFY_URL="${WHATSAPP_NOTIFY_URL:-http://127.0.0.1:3555/notify/system-update}"
 WHATSAPP_NOTIFY_TOKEN="${WHATSAPP_NOTIFY_TOKEN:-CHANGEME}"
+WHATSAPP_NOTIFY_ENABLED="${WHATSAPP_NOTIFY_ENABLED:-1}"
+REFRESH_DASHBOARD_ENABLED="${REFRESH_DASHBOARD_ENABLED:-1}"
 MODE="${1:-help}"
 TARGET="${2:-}"
 
 declare -Ar UPDATE_DIRS=(
-  [prowlarr]="$ROOT/services/prowlarr"
-  [sonarr]="$ROOT/services/sonarr"
-  [radarr]="$ROOT/services/radarr"
-  [bazarr]="$ROOT/services/bazarr"
-  [jellyfin]="$ROOT/services/jellyfin"
-  [flaresolverr]="$ROOT/services/flaresolverr"
-  [subgen]="$ROOT/services/subgen"
-  [jellyseerr]="$ROOT/services/jellyseerr"
-  [tdarr]="$ROOT/services/tdarr"
+  [prowlarr]="$COMPOSE_ROOT/services/prowlarr"
+  [sonarr]="$COMPOSE_ROOT/services/sonarr"
+  [radarr]="$COMPOSE_ROOT/services/radarr"
+  [bazarr]="$COMPOSE_ROOT/services/bazarr"
+  [jellyfin]="$COMPOSE_ROOT/services/jellyfin"
+  [flaresolverr]="$COMPOSE_ROOT/services/flaresolverr"
+  [subgen]="$COMPOSE_ROOT/services/subgen"
+  [jellyseerr]="$COMPOSE_ROOT/services/jellyseerr"
+  [tdarr]="$COMPOSE_ROOT/services/tdarr"
 )
 
 declare -Ar UPDATE_SERVICES=(
@@ -57,6 +64,30 @@ declare -Ar BACKUP_KEYS=(
   [tdarr]='tdarr'
 )
 
+declare -Ar READY_URLS=(
+  [prowlarr]='http://127.0.0.1:9696/'
+  [sonarr]='http://127.0.0.1:8989/'
+  [radarr]='http://127.0.0.1:7878/'
+  [bazarr]='http://127.0.0.1:6767/'
+  [jellyfin]='http://127.0.0.1:8096/'
+  [flaresolverr]='http://127.0.0.1:8191/'
+  [subgen]='http://127.0.0.1:9000/'
+  [jellyseerr]='http://127.0.0.1:5055/'
+  [tdarr]='http://127.0.0.1:8265/'
+)
+
+declare -Ar READY_TIMEOUTS=(
+  [prowlarr]=180
+  [sonarr]=180
+  [radarr]=180
+  [bazarr]=420
+  [jellyfin]=240
+  [flaresolverr]=300
+  [subgen]=180
+  [jellyseerr]=240
+  [tdarr]=300
+)
+
 DENYLIST=(
   postgres
   portainer
@@ -73,6 +104,8 @@ DENYLIST=(
 
 status='failed'
 summary=''
+logging_ready=0
+failure_notified=0
 
 timestamp() {
   date '+%F %T'
@@ -108,19 +141,60 @@ EOF
 }
 
 write_state() {
+  local temp_file
+
   mkdir -p "$(dirname "$STATE_FILE")"
+  temp_file="$(mktemp "${STATE_FILE}.XXXXXX")"
   {
     printf 'last_run=%s\n' "$(date +%s)"
     printf 'last_status=%s\n' "$status"
     printf 'last_mode=%s\n' "$MODE"
     printf 'last_target=%s\n' "$TARGET"
-  } > "$STATE_FILE"
+  } > "$temp_file"
+  mv -f -- "$temp_file" "$STATE_FILE"
+}
+
+notify_whatsapp_raw() {
+  local message="$1"
+
+  [[ "$WHATSAPP_NOTIFY_ENABLED" == '1' ]] || return 0
+  if [[ -z "$WHATSAPP_NOTIFY_TOKEN" || "$WHATSAPP_NOTIFY_TOKEN" == 'CHANGEME' ]]; then
+    return 0
+  fi
+  curl -fsS -X POST "$WHATSAPP_NOTIFY_URL" \
+    -H 'Content-Type: application/json' \
+    -H "x-update-token: $WHATSAPP_NOTIFY_TOKEN" \
+    -d "$(printf '{\"message\":%s}' "$(printf '%s' "$message" | jq -Rs .)")" >/dev/null \
+    || log 'WhatsApp notification failed'
+}
+
+on_exit() {
+  local exit_code="$1"
+
+  [[ "$logging_ready" == '1' ]] || return 0
+  if [[ "$exit_code" -ne 0 ]]; then
+    status='failed'
+    summary="Update failed: mode=$MODE target=${TARGET:-none}"
+    if [[ "$DRY_RUN" == '0' && "$failure_notified" == '0' ]]; then
+      failure_notified=1
+      notify_whatsapp_raw "$summary"
+    fi
+  fi
+  write_state
 }
 
 setup_logging() {
   mkdir -p "$LOG_DIR"
   exec > >(tee -a "$LOG_FILE") 2>&1
-  trap write_state EXIT
+  logging_ready=1
+  trap 'on_exit $?' EXIT
+}
+
+acquire_lock() {
+  [[ "$UPDATE_ORCHESTRATED" == '1' ]] && return 0
+  mkdir -p "$(dirname "$LOCK_FILE")"
+  exec 8>"$LOCK_FILE"
+  flock -n 8 || die 'ya hay otra actualizacion de servicio en ejecucion'
 }
 
 print_cmd() {
@@ -193,8 +267,14 @@ check_media_mounts() {
 }
 
 run_global_health_check() {
+  local attempt
+
   [[ -x "$HEALTH_CHECK_SCRIPT" ]] || die "falta $HEALTH_CHECK_SCRIPT"
-  "$HEALTH_CHECK_SCRIPT"
+  for attempt in 1 2 3; do
+    "$HEALTH_CHECK_SCRIPT" && return 0
+    [[ "$attempt" -eq 3 ]] || sleep 5
+  done
+  return 1
 }
 
 validate_backup_file() {
@@ -260,7 +340,8 @@ assert_container_safe_for_update() {
 
 wait_for_compose_services() {
   local compose_file="$1"
-  shift
+  local project_dir="$2"
+  shift 2
   local -a services=("$@")
   local attempt
   local service
@@ -272,7 +353,7 @@ wait_for_compose_services() {
   for attempt in $(seq 1 45); do
     ready=1
     for service in "${services[@]}"; do
-      container_id="$(docker compose -f "$compose_file" ps -q "$service")"
+      container_id="$(docker compose --project-directory "$project_dir" -f "$compose_file" ps -q "$service")"
       if [[ -z "$container_id" ]]; then
         ready=0
         break
@@ -290,8 +371,31 @@ wait_for_compose_services() {
   return 1
 }
 
+wait_for_target_endpoint() {
+  local target="$1"
+  local url="${READY_URLS[$target]-}"
+  local timeout_seconds="${READY_TIMEOUTS[$target]-180}"
+  local deadline=$(( $(date +%s) + timeout_seconds ))
+  local code
+
+  [[ -n "$url" ]] || return 0
+  log "Esperando readiness HTTP de $target (maximo ${timeout_seconds}s)"
+  while (( $(date +%s) < deadline )); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 10 "$url" 2>/dev/null || true)"
+    if [[ "$code" =~ ^[0-9]+$ && "$code" -ge 200 && "$code" -lt 400 ]]; then
+      log "Readiness HTTP de $target: OK ($code)"
+      return 0
+    fi
+    sleep 5
+  done
+  log "Readiness HTTP de $target: timeout"
+  return 1
+}
+
 rollback_compose_services() {
-  local compose_file="$1"
+  local target="$1"
+  local compose_file="$ROLLBACK_COMPOSE_ROOT/services/$target/docker-compose.yml"
+  local project_dir="$ROOT/services/$target"
   shift
   local -a services=("$@")
   local service
@@ -300,8 +404,9 @@ rollback_compose_services() {
   for service in "${services[@]}"; do
     docker image tag "${OLD_IMAGE_IDS[$service]}" "${OLD_IMAGE_REFS[$service]}"
   done
-  docker compose -f "$compose_file" up -d --no-deps --force-recreate "${services[@]}"
-  wait_for_compose_services "$compose_file" "${services[@]}"
+  docker compose --project-directory "$project_dir" -f "$compose_file" up -d --no-deps --force-recreate "${services[@]}"
+  wait_for_compose_services "$compose_file" "$project_dir" "${services[@]}" \
+    && wait_for_target_endpoint "$target"
 }
 
 restore_portainer() {
@@ -338,17 +443,18 @@ update_allowed_service() {
 
   dir="${UPDATE_DIRS[$target]}"
   compose_file="$dir/docker-compose.yml"
+  project_dir="$ROOT/services/$target"
   read -r -a services <<< "${UPDATE_SERVICES[$target]}"
 
   [[ -f "$compose_file" ]] || die "no existe el Compose de $target: $compose_file"
-  docker compose -f "$compose_file" config --quiet
+  docker compose --project-directory "$project_dir" -f "$compose_file" config --quiet
   check_media_mounts
   assert_watchtower_stopped
   check_recent_service_backup "$target"
   run_global_health_check
 
   for service in "${services[@]}"; do
-    container_id="$(docker compose -f "$compose_file" ps -q "$service")"
+    container_id="$(docker compose --project-directory "$project_dir" -f "$compose_file" ps -q "$service")"
     [[ -n "$container_id" ]] || die "Compose no administra un contenedor running para $service"
     assert_container_safe_for_update "$container_id" "$service"
     OLD_IMAGE_IDS["$service"]="$(docker inspect --format '{{.Image}}' "$container_id")"
@@ -359,22 +465,23 @@ update_allowed_service() {
 
   require_confirmation "$target"
   if [[ "$DRY_RUN" == '1' ]]; then
-    run_cmd docker compose -f "$compose_file" pull "${services[@]}"
-    run_cmd docker compose -f "$compose_file" up -d --no-deps "${services[@]}"
+    run_cmd docker compose --project-directory "$project_dir" -f "$compose_file" pull "${services[@]}"
+    run_cmd docker compose --project-directory "$project_dir" -f "$compose_file" up -d --no-deps "${services[@]}"
     status='dry-run'
     return 0
   fi
 
-  run_cmd docker compose -f "$compose_file" pull "${services[@]}"
-  if ! run_cmd docker compose -f "$compose_file" up -d --no-deps "${services[@]}"; then
-    rollback_compose_services "$compose_file" "${services[@]}" \
+  run_cmd docker compose --project-directory "$project_dir" -f "$compose_file" pull "${services[@]}"
+  if ! run_cmd docker compose --project-directory "$project_dir" -f "$compose_file" up -d --no-deps "${services[@]}"; then
+    rollback_compose_services "$target" "${services[@]}" \
       || die "fallo la actualizacion y tambien el rollback de $target"
     die "fallo la actualizacion; $target fue restaurado"
   fi
 
-  if ! wait_for_compose_services "$compose_file" "${services[@]}" \
+  if ! wait_for_compose_services "$compose_file" "$project_dir" "${services[@]}" \
+    || ! wait_for_target_endpoint "$target" \
     || ! run_global_health_check; then
-    rollback_compose_services "$compose_file" "${services[@]}" \
+    rollback_compose_services "$target" "${services[@]}" \
       || die "fallo el health-check y tambien el rollback de $target"
     die "fallo el health-check; $target fue restaurado"
   fi
@@ -471,10 +578,13 @@ update_portainer() {
 }
 
 refresh_dashboard_cache() {
-  [[ "$DRY_RUN" == '0' && "$status" == 'ok' ]] || return 0
+  [[ "$DRY_RUN" == '0' && "$status" == 'ok' && "$REFRESH_DASHBOARD_ENABLED" == '1' ]] || return 0
   if [[ -x "$STACK_DASHBOARD_SCRIPT" ]]; then
-    "$STACK_DASHBOARD_SCRIPT"
+    if ! "$STACK_DASHBOARD_SCRIPT"; then
+      log 'WARN: no se pudo refrescar el cache del dashboard; la actualizacion del servicio sigue siendo valida'
+    fi
   fi
+  return 0
 }
 
 notify_whatsapp() {
@@ -486,11 +596,7 @@ notify_whatsapp() {
     return 0
   fi
 
-  curl -fsS -X POST "$WHATSAPP_NOTIFY_URL" \
-    -H 'Content-Type: application/json' \
-    -H "x-update-token: $WHATSAPP_NOTIFY_TOKEN" \
-    -d "$(printf '{\"message\":%s}' "$(printf '%s' "$message" | jq -Rs .)")" >/dev/null \
-    || log 'WhatsApp notification failed'
+  notify_whatsapp_raw "$message"
 }
 
 preview_allowlist() {
@@ -506,6 +612,8 @@ preview_allowlist() {
 main() {
   validate_settings
   require_cmd docker
+  require_cmd flock
+  require_cmd curl
   require_cmd jq
   require_cmd tar
   require_cmd gzip
@@ -522,6 +630,7 @@ main() {
   esac
 
   setup_logging
+  acquire_lock
   log "Starting safe update workflow: mode=$MODE target=${TARGET:-none} dry_run=$DRY_RUN"
 
   case "$MODE" in

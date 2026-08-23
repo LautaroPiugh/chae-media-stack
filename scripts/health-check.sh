@@ -22,7 +22,7 @@ SERVICES=(
   "Tdarr Node:chae-tdarr-node:docker-tcp:chae-tdarr,8266"
   "Uptime Kuma:chae-uptime-kuma:http:3001"
   "Homepage:chae-homepage:http:3003"
-  "WhatsApp Bot:jellyfin-whatsapp-bot:http:3555"
+  "WhatsApp Bot:jellyfin-whatsapp-bot:http:3555:/health"
   "Portainer:portainer:https:9443"
 )
 
@@ -41,11 +41,21 @@ check_container() {
 check_http() {
   local port="$1"
   local protocol="${2:-http}"
+  local path="${3:-/}"
+  local -a curl_args=(-s -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 10)
+  local attempt
   local code
-  code="$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 "${protocol}://localhost:${port}" 2>/dev/null || true)"
-  if [[ "$code" =~ ^[0-9]+$ ]] && [[ "$code" -ge 200 && "$code" -lt 500 ]]; then
-    return 0
+
+  if [[ "$protocol" == 'https' ]]; then
+    curl_args+=(--insecure)
   fi
+  for attempt in 1 2; do
+    code="$(curl "${curl_args[@]}" "${protocol}://127.0.0.1:${port}${path}" 2>/dev/null || true)"
+    if [[ "$code" =~ ^[0-9]+$ ]] && [[ "$code" -ge 200 && "$code" -lt 400 ]]; then
+      return 0
+    fi
+    [[ "$attempt" -eq 2 ]] || sleep 1
+  done
   return 1
 }
 
@@ -84,7 +94,7 @@ printf "Docker:   %s\n\n" "$(docker --version | cut -d' ' -f3 | tr -d ',')"
 header "Estado de Servicios"
 
 for service in "${SERVICES[@]}"; do
-  IFS=':' read -r label container type port <<<"$service"
+  IFS=':' read -r label container type port path <<<"$service"
   total=$((total + 1))
 
   if ! check_container "$container"; then
@@ -95,12 +105,12 @@ for service in "${SERVICES[@]}"; do
 
   case "$type" in
     http)
-      if check_http "$port"; then
+      if check_http "$port" 'http' "${path:-/}"; then
         printf "  ${GREEN}✔${NC} %-20s %-25s ${GREEN}%s${NC}\n" "$label" "($container)" "HTTP $port OK"
         up=$((up + 1))
       else
-        printf "  ${YELLOW}~${NC} %-20s %-25s ${YELLOW}%s${NC}\n" "$label" "($container)" "HTTP $port no responde"
-        up=$((up + 1))
+        printf "  ${RED}✘${NC} %-20s %-25s ${RED}%s${NC}\n" "$label" "($container)" "HTTP $port no responde"
+        down=$((down + 1))
       fi
       ;;
     https)
@@ -108,8 +118,8 @@ for service in "${SERVICES[@]}"; do
         printf "  ${GREEN}✔${NC} %-20s %-25s ${GREEN}%s${NC}\n" "$label" "($container)" "HTTPS $port OK"
         up=$((up + 1))
       else
-        printf "  ${YELLOW}~${NC} %-20s %-25s ${YELLOW}%s${NC}\n" "$label" "($container)" "HTTPS $port no responde"
-        up=$((up + 1))
+        printf "  ${RED}✘${NC} %-20s %-25s ${RED}%s${NC}\n" "$label" "($container)" "HTTPS $port no responde"
+        down=$((down + 1))
       fi
       ;;
     tcp)
@@ -117,8 +127,8 @@ for service in "${SERVICES[@]}"; do
         printf "  ${GREEN}✔${NC} %-20s %-25s ${GREEN}%s${NC}\n" "$label" "($container)" "Puerto $port abierto"
         up=$((up + 1))
       else
-        printf "  ${YELLOW}~${NC} %-20s %-25s ${YELLOW}%s${NC}\n" "$label" "($container)" "Puerto $port cerrado"
-        up=$((up + 1))
+        printf "  ${RED}✘${NC} %-20s %-25s ${RED}%s${NC}\n" "$label" "($container)" "Puerto $port cerrado"
+        down=$((down + 1))
       fi
       ;;
     docker-tcp)
@@ -137,12 +147,15 @@ done
 
 header "Almacenamiento"
 for mount in /mnt/media /mnt/media2; do
+  total=$((total + 1))
   if mountpoint -q "$mount" 2>/dev/null; then
     usage="$(df -h "$mount" | awk 'NR==2 {print $5}')"
     avail="$(df -h "$mount" | awk 'NR==2 {print $4}')"
     printf "  ${GREEN}✔${NC} %-20s %s usado, %s libres\n" "$mount" "$usage" "$avail"
+    up=$((up + 1))
   else
     printf "  ${RED}✘${NC} %-20s ${RED}NO MONTADO${NC}\n" "$mount"
+    down=$((down + 1))
   fi
 done
 

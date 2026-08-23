@@ -13,6 +13,8 @@ PG_USER="${PG_BACKUP_USER:-}"
 PG_DATABASE="${PG_BACKUP_DATABASE:-}"
 BACKUP_LOCK_FILE="${BACKUP_LOCK_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/chae-backup-stack.lock}"
 TMP_DUMP=''
+JELLYFIN_DB_SNAPSHOT=''
+TMP_JELLYFIN_GZIP=''
 
 umask 077
 
@@ -28,6 +30,12 @@ die() {
 cleanup() {
   if [[ -n "$TMP_DUMP" && -f "$TMP_DUMP" ]]; then
     rm -f -- "$TMP_DUMP"
+  fi
+  if [[ -n "$JELLYFIN_DB_SNAPSHOT" && -f "$JELLYFIN_DB_SNAPSHOT" ]]; then
+    rm -f -- "$JELLYFIN_DB_SNAPSHOT"
+  fi
+  if [[ -n "$TMP_JELLYFIN_GZIP" && -f "$TMP_JELLYFIN_GZIP" ]]; then
+    rm -f -- "$TMP_JELLYFIN_GZIP"
   fi
 }
 
@@ -176,6 +184,7 @@ fi
 require_cmd gzip
 require_cmd flock
 require_cmd mktemp
+require_cmd node
 require_cmd tar
 
 mkdir -p "$(dirname "$BACKUP_LOCK_FILE")"
@@ -220,6 +229,49 @@ mv -- "$TMP_DUMP" "$FINAL_DUMP"
 TMP_DUMP=''
 log "Dump PostgreSQL verificado: $FINAL_DUMP ($UNCOMPRESSED_BYTES bytes SQL sin comprimir)"
 
+# ── Jellyfin SQLite DB ──
+JELLYFIN_DB="$PROJECT_DIR/services/jellyfin/config/data/data/jellyfin.db"
+JELLYFIN_DB_BACKUP="$BACKUP_DIR/database/jellyfin-$DATE.db.gz"
+[[ -f "$JELLYFIN_DB" ]] || die "falta la base SQLite de Jellyfin: $JELLYFIN_DB"
+[[ ! -e "$JELLYFIN_DB_BACKUP" ]] || die "el archivo final ya existe: $JELLYFIN_DB_BACKUP"
+
+JELLYFIN_DB_SNAPSHOT="$(mktemp "$BACKUP_DIR/database/.jellyfin-$DATE.XXXXXX.db")"
+chmod 600 "$JELLYFIN_DB_SNAPSHOT" 2>/dev/null || true
+log "Generando snapshot online consistente de Jellyfin SQLite..."
+node --no-warnings - "$JELLYFIN_DB" "$JELLYFIN_DB_SNAPSHOT" <<'NODE'
+const { DatabaseSync, backup } = require('node:sqlite');
+
+const source = new DatabaseSync(process.argv[2], { readOnly: true });
+backup(source, process.argv[3])
+  .then(() => source.close())
+  .catch((error) => {
+    source.close();
+    console.error(error);
+    process.exit(1);
+  });
+NODE
+
+node --no-warnings - "$JELLYFIN_DB_SNAPSHOT" <<'NODE'
+const { DatabaseSync } = require('node:sqlite');
+
+const database = new DatabaseSync(process.argv[2], { readOnly: true });
+const result = Object.values(database.prepare('PRAGMA quick_check').get())[0];
+database.close();
+if (result !== 'ok') {
+  console.error(`PRAGMA quick_check failed: ${result}`);
+  process.exit(1);
+}
+NODE
+
+TMP_JELLYFIN_GZIP="$(mktemp "$BACKUP_DIR/database/.jellyfin-$DATE.XXXXXX.db.gz")"
+gzip -c "$JELLYFIN_DB_SNAPSHOT" > "$TMP_JELLYFIN_GZIP"
+gzip -t "$TMP_JELLYFIN_GZIP" || die "el backup SQLite de Jellyfin no supera gzip -t"
+mv -- "$TMP_JELLYFIN_GZIP" "$JELLYFIN_DB_BACKUP"
+TMP_JELLYFIN_GZIP=''
+rm -f -- "$JELLYFIN_DB_SNAPSHOT"
+JELLYFIN_DB_SNAPSHOT=''
+log "Snapshot SQLite de Jellyfin verificado: $JELLYFIN_DB_BACKUP"
+
 # ── Configs de servicios clave ──
 CONFIG_DIRS=(
   "jellyfin:$PROJECT_DIR/services/jellyfin"
@@ -240,7 +292,15 @@ for pair in "${CONFIG_DIRS[@]}"; do
     log "Backupeando configuracion: $name"
     archive="$BACKUP_DIR/configs/${name}-$DATE.tar.gz"
     log "Destino: $archive"
-    tar czf "$archive" -C "$(dirname "$src")" "$(basename "$src")"
+    if [[ "$name" == 'jellyfin' ]]; then
+      tar czf "$archive" \
+        --exclude='jellyfin/config/data/data/jellyfin.db' \
+        --exclude='jellyfin/config/data/data/jellyfin.db-shm' \
+        --exclude='jellyfin/config/data/data/jellyfin.db-wal' \
+        -C "$(dirname "$src")" "$(basename "$src")"
+    else
+      tar czf "$archive" -C "$(dirname "$src")" "$(basename "$src")"
+    fi
   else
     die "falta el directorio obligatorio de $name: $src"
   fi

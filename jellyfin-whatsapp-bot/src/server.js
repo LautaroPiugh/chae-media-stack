@@ -30,6 +30,17 @@ app.get('/status', requireBotAdminToken, (req, res) => {
   });
 });
 
+app.get('/update-ready', (req, res) => {
+  if (!isValidToken(config.whatsapp.updateNotifyToken, req.get('x-update-token'))) {
+    res.status(401).json({ ok: false, error: 'unauthorized' });
+    return;
+  }
+  res.json({
+    ok: true,
+    whatsappConnected: isWhatsAppConnected(),
+  });
+});
+
 app.get('/test-whatsapp', requireBotAdminToken, async (req, res) => {
   const sent = await sendWhatsAppMessage('🧪 Test message from Jellyfin WhatsApp Bot');
   res.json({ ok: sent });

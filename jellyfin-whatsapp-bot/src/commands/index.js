@@ -13,6 +13,7 @@ const { handleSpace } = require('./space');
 const { handleRandom } = require('./random');
 const { handleRecommend } = require('./recommend');
 const { handleDeleteSearch, handleDeleteSelect, handleDeleteConfirm } = require('./delete');
+const { handleWatchedPreview, handleWatchedConfirm } = require('./deleteWatched');
 const { handleUpdateSearch, handleUpdateSelect, handleActualizarMass } = require('./update');
 const { handleRefreshSearch, handleRefreshSelect } = require('./refresh');
 const { handleLatest } = require('./latest');
@@ -34,6 +35,12 @@ const { handleTrending, handleTrendingSelect } = require('./trending');
 const { formatPanel } = require('../utils/panel');
 const { getPending } = require('../store/pendingSelections');
 const { formatErrorPanel } = require('../utils/formatMessage');
+const {
+  handleSystemUpdateCancel,
+  handleSystemUpdateConfirm,
+  handleSystemUpdatePreview,
+  handleSystemUpdateStatus,
+} = require('./stackUpdate');
 
 function getFallbackMessage(text, isAdmin) {
   const lower = text.toLowerCase().trim();
@@ -172,6 +179,26 @@ function processCommand(text, userJid) {
     return handleLatest();
   }
 
+  if (lower === '/actualizarsistema estado') {
+    if (!isAdmin) return formatNoPermission();
+    return handleSystemUpdateStatus();
+  }
+
+  if (lower === '/actualizarsistema') {
+    if (!isAdmin) return formatNoPermission();
+    return handleSystemUpdatePreview(userJid);
+  }
+
+  if (/^confirmar actualizacion \d{6}$/.test(lower)) {
+    if (!isAdmin) return formatNoPermission();
+    return handleSystemUpdateConfirm(userJid, lower);
+  }
+
+  if (lower === '/cancelar actualizacion') {
+    if (!isAdmin) return formatNoPermission();
+    return handleSystemUpdateCancel(userJid);
+  }
+
   if (lower === '/actualizar' || lower === '/actualizar todo' || lower === '/actualizar all') {
     if (!isAdmin) return formatNoPermission();
     return handleActualizarMass(userJid);
@@ -241,6 +268,22 @@ function processCommand(text, userJid) {
 
   if (lower === '/cancelar') {
     return handleCancel(userJid);
+  }
+
+  if (lower === 'confirmar eliminar vistas') {
+    if (!isAdmin) {
+      return formatNoPermission();
+    }
+
+    return handleWatchedConfirm(userJid);
+  }
+
+  if (lower === '/vistas' || lower === '/vistos') {
+    if (!isAdmin) {
+      return formatNoPermission();
+    }
+
+    return handleWatchedPreview(userJid);
   }
 
   if (lower === 'confirmar eliminar') {

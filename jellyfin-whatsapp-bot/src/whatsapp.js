@@ -1,9 +1,13 @@
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
+const { unlink } = require('fs/promises');
+const { join } = require('path');
+const qrcode = require('qrcode');
 const pino = require('pino');
 const config = require('./config');
 const { getAuthorizedSenderJid, numberToJid } = require('./utils/jid');
 const { authDir, ensureAuthDir } = require('./utils/auth');
+
+const qrPath = join(authDir, 'whatsapp-qr.png');
 
 let sock = null;
 let connected = false;
@@ -12,6 +16,44 @@ let startPromise = null;
 let manualReconnect = false;
 
 const logger = pino({ level: 'info' });
+
+function renderCompactQr(value) {
+  const matrix = qrcode.create(value, { errorCorrectionLevel: 'L' }).modules;
+  const margin = 4;
+  const width = matrix.size + margin * 2;
+  const height = matrix.size + margin * 2;
+  const dots = [
+    [0, 0, 0x01], [0, 1, 0x02], [0, 2, 0x04], [1, 0, 0x08],
+    [1, 1, 0x10], [1, 2, 0x20], [0, 3, 0x40], [1, 3, 0x80],
+  ];
+  const lines = [];
+
+  for (let y = 0; y < height; y += 4) {
+    let line = '';
+    for (let x = 0; x < width; x += 2) {
+      let pattern = 0;
+      for (const [dx, dy, bit] of dots) {
+        const moduleX = x + dx - margin;
+        const moduleY = y + dy - margin;
+        if (moduleX >= 0 && moduleY >= 0 && moduleX < matrix.size && moduleY < matrix.size
+          && matrix.get(moduleX, moduleY)) {
+          pattern |= bit;
+        }
+      }
+      line += String.fromCodePoint(0x2800 + pattern);
+    }
+    lines.push(line);
+  }
+
+  return lines.join('\n');
+}
+
+function publishQr(qr) {
+  console.log(`\n📱 Scan this compact WhatsApp QR:\n\n${renderCompactQr(qr)}\n`);
+  qrcode.toFile(qrPath, qr, { width: 192, margin: 1 })
+    .then(() => console.log(`📱 WhatsApp QR ready: ${qrPath}`))
+    .catch((error) => console.error(`[WhatsApp] Could not save QR: ${error.message}`));
+}
 
 function isGroupMessage(jid) {
   return jid && jid.includes('@g.us');
@@ -44,13 +86,12 @@ async function startWhatsApp() {
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      console.log('\n📱 Scan the QR code below with WhatsApp:\n');
-      qrcode.generate(qr, { small: true });
-      console.log('\n');
+      publishQr(qr);
     }
     if (connection === 'open') {
       connected = true;
       manualReconnect = false;
+      unlink(qrPath).catch(() => {});
       console.log('✅ WhatsApp connected');
     } else if (connection === 'close') {
       connected = false;
@@ -65,12 +106,6 @@ async function startWhatsApp() {
       console.log('❌ WhatsApp connection error');
       connected = false;
     }
-  });
-
-  sock.ev.on('qr', (qr) => {
-    console.log('\n📱 Scan the QR code below with WhatsApp:\n');
-    qrcode.generate(qr, { small: true });
-    console.log('\n');
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type, requestId }) => {

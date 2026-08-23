@@ -147,6 +147,8 @@ El bot se conecta a WhatsApp Web usando la librería `@whiskeysockets/baileys` (
 | `/catalogo [tipo]` | Catálogo completo de películas o series |
 | `/faltantes [tipo]` | Faltantes en la biblioteca |
 | `/actualizar [nombre]` | Buscar mejor calidad para contenido existente |
+| `/actualizarsistema` | Preflight de Git y Docker con confirmación temporal |
+| `/actualizarsistema estado` | Ver el progreso de la cola de actualización |
 | `/eliminar [nombre]` | **(admin)** Eliminar de biblioteca + disco + torrents |
 | `/refrescar [nombre]` | **(admin)** Refrescar metadatos + rescan en Sonarr |
 | `/reiniciar` | **(admin)** Reinicia el bot |
@@ -262,7 +264,7 @@ Traduce subtítulos EN descargados recientemente a ES usando Gemini AI.
 | 10 minutos | `auto_translate.py` | Traduce subs EN a ES via Gemini |
 | 6 horas | `check_es_subs.py` | Verifica y descarga subtítulos ES faltantes |
 | 3am daily | `backup-stack.sh` | Dump PostgreSQL + configs de servicios (retención 14 días) |
-| 4am daily | Watchtower | Actualiza automáticamente todos los contenedores Docker |
+| Manual por WhatsApp | `media-update-broker` | Actualiza Git y la allowlist Docker de forma secuencial, con backups, health-check y rollback |
 
 ## Seguridad
 

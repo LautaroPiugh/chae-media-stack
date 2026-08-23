@@ -45,6 +45,7 @@ function getMovieRank(movie, query) {
 
 function mapMovie(movie) {
   return {
+    id: movie.id,
     title: movie.title,
     originalTitle: movie.originalTitle,
     year: movie.year,

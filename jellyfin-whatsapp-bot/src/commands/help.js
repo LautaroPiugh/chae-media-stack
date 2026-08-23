@@ -57,6 +57,7 @@ function getAdminSection() {
     lines: [
       '- /refrescar nombre',
       '- /eliminar nombre',
+      '- /vistas',
       '- /limpiartorrents',
       '- /reconectar',
       '- /reiniciar',
@@ -65,6 +66,8 @@ function getAdminSection() {
       '- /agu-on',
       '- /agu-status',
       '- /descargar-tendencias',
+      '- /actualizarsistema',
+      '- /actualizarsistema estado',
     ],
   };
 }

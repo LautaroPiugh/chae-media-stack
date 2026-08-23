@@ -1,0 +1,21 @@
+[Unit]
+Description=Chae media update broker
+ConditionUser=chae
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/home/chae/jellyfin-whatsapp-bot/.env
+Environment=MEDIA_UPDATE_BROKER_SOCKET=/home/chae/.local/run/chae-media-update/broker.sock
+Environment=UPDATE_BROKER_SECRET_FILE=/home/chae/jellyfin-whatsapp-bot/auth/update-broker.secret
+ExecStart=/usr/bin/python3 /home/chae/scripts/media-update-broker.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+UMask=0077
+
+[Install]
+WantedBy=default.target
