@@ -1,6 +1,6 @@
 services:
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:latest
+    image: lscr.io/linuxserver/qbittorrent@sha256:352371a7242e8b4aa10958ca02076d1023758070519b89a10251475fb9f1a35a
     container_name: chae-qbittorrent
     restart: unless-stopped
     environment:

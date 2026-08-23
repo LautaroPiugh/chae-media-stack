@@ -1,6 +1,6 @@
 services:
   tdarr:
-    image: ghcr.io/haveagitgat/tdarr:latest
+    image: ghcr.io/haveagitgat/tdarr@sha256:45742f00e51a58553844c8b13d97e7ae9b2ee9a056bd8e5993d9a8282a45a23f
     container_name: chae-tdarr
     restart: unless-stopped
     environment:
@@ -34,9 +34,10 @@ services:
       - /dev/dri:/dev/dri
     group_add:
       - "107"
+    mem_limit: 2g
 
   tdarr-node:
-    image: ghcr.io/haveagitgat/tdarr_node:latest
+    image: ghcr.io/haveagitgat/tdarr_node@sha256:7542459ac5ed5cd299600530e9625b9d590629d5dc391c0016773f5d6aa3fe75
     container_name: chae-tdarr-node
     restart: unless-stopped
     depends_on:
@@ -72,6 +73,7 @@ services:
       - /dev/dri:/dev/dri
     group_add:
       - "107"
+    mem_limit: 8g
 
 networks:
   qbittorrent_default:

@@ -1,6 +1,6 @@
 services:
   jellyseerr:
-    image: ghcr.io/seerr-team/seerr:latest
+    image: ghcr.io/seerr-team/seerr@sha256:f4768de5f616248d723e05891f3345a1402123775d03bf0890dbfedc0831bda1
     init: true
     container_name: chae-jellyseerr
     restart: unless-stopped
@@ -13,6 +13,12 @@ services:
       - "192.168.1.100:5055:5055"
     networks:
       - qbittorrent_default
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:5055/api/v1/status"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 networks:
   qbittorrent_default:

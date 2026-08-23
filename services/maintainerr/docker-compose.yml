@@ -1,0 +1,18 @@
+services:
+  maintainerr:
+    image: ghcr.io/maintainerr/maintainerr@sha256:95e429451ea45380430d260450ab301eed9ce91fbcba5f94cf8507bd0bac0d08
+    container_name: chae-maintainerr
+    restart: unless-stopped
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+    ports:
+      - "127.0.0.1:8787:6246"
+      - "192.168.1.100:8787:6246"
+    volumes:
+      - ./data:/opt/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:6246/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

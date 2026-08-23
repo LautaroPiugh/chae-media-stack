@@ -1,6 +1,6 @@
 services:
   radarr:
-    image: lscr.io/linuxserver/radarr:latest
+    image: lscr.io/linuxserver/radarr@sha256:a45b5ab0f850f39edb4cc9c95bbd967b52ddc3d4574a4dfb45561177db6c88f4
     container_name: chae-radarr
     restart: unless-stopped
     environment:
@@ -16,6 +16,12 @@ services:
       - "192.168.1.100:7878:7878"
     networks:
       - qbittorrent_default
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7878/ping"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 networks:
   qbittorrent_default:

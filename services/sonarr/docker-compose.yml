@@ -1,6 +1,6 @@
 services:
   sonarr:
-    image: lscr.io/linuxserver/sonarr:latest
+    image: lscr.io/linuxserver/sonarr@sha256:373159ba768e23a3a1c497d9f2b936addf8fd5b1fdce7dd6a14080ac928bfda0
     container_name: chae-sonarr
     restart: unless-stopped
     environment:
@@ -15,6 +15,12 @@ services:
       - "192.168.1.100:8989:8989"
     networks:
       - qbittorrent_default
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8989/ping"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 networks:
   qbittorrent_default:

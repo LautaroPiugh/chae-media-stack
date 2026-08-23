@@ -1,6 +1,6 @@
 services:
   prowlarr:
-    image: lscr.io/linuxserver/prowlarr:latest
+    image: lscr.io/linuxserver/prowlarr@sha256:1295cff29d10b486c0d8324d1559a552140a5932bf8b3d87e398654414f63f92
     container_name: chae-prowlarr
     restart: unless-stopped
     environment:
@@ -15,6 +15,12 @@ services:
     networks:
       - qbittorrent_default
       - prowlarr_default
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9696/ping"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 networks:
   qbittorrent_default:

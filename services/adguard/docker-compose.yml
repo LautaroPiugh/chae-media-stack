@@ -1,6 +1,6 @@
 services:
   adguard:
-    image: adguard/adguardhome:latest
+    image: adguard/adguardhome@sha256:1ea34eafe5dc691007946e8eaab7bf46b0de9412f39213d8c06e48b53bf9a6c5
     container_name: chae-adguard
     restart: unless-stopped
     ports:
@@ -13,6 +13,12 @@ services:
       - ./work:/opt/adguardhome/work
     networks:
       - qbittorrent_default
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/login.html"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 networks:
   qbittorrent_default:

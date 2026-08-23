@@ -1,12 +1,15 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16@sha256:17e67d7b9890c99b055ba1e0d5c5be4ec27c9d3a72bda32db24a5e5d8a85af0c
     container_name: chae-postgres
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: chae
-      POSTGRES_PASSWORD: CHANGEME
-      POSTGRES_DB: chae
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
