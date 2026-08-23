@@ -107,3 +107,8 @@ scripts/subtitle-downloader/
 # IDE
 .idea/
 .vscode/
+
+# Runtime data & logs
+**/*.log
+**/*.log.*
+services/maintainerr/data/

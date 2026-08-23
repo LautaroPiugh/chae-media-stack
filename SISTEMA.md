@@ -39,7 +39,7 @@ Combina ambos discos. Política: `mfs` (most free space — escribe en el disco 
 
 ---
 
-## Servicios Docker (17 containers)
+## Servicios Docker (18 containers)
 
 Todos corren con `PUID=1000`, `PGID=1000` (usuario `chae`), `TZ=America/Argentina/Buenos_Aires`.
 
@@ -225,6 +225,15 @@ python3 /home/chae/scripts/check_es_subs.py --translate-movie "Título de pelíc
 **Cron**: Cada 10 minutos
 Traduce subs EN→ES recién descargados por Bazarr usando Gemini AI.
 
+### Filtro anti-SDH (subs para sordos)
+
+Política: solo subtítulos español/español latam normales, nunca SDH/HI/CC.
+
+- `check_es_subs.py` descarta candidatos marcados como hearing impaired (flag del API o nombre con `.hi.`/`.sdh.`/`.cc.`)
+- Bazarr tiene `hi: False` en los perfiles de idioma
+- `auto_translate.py` omite subs EN cuyo archivo sea SDH
+- Cuarentena de SDH históricos: `scripts/sdh-quarantine.sh` mueve los existentes a `/mnt/media/backups/sdh-quarantine/` (94 archivos movidos el 2026-08-23; restaurar con `mv` inverso)
+
 ### OMDb Cache Persistente
 
 Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas/día. Se guarda tras cada consulta.
@@ -353,10 +362,28 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 Los backups corren cada día a las 3am vía `/home/chae/scripts/backup-stack.sh`:
 
 - **Destino**: `/mnt/media2/backups/stack/`
+- **Espejo**: copia rsync a `/mnt/media1/backups/stack/` (disco físico independiente de la rama mergerfs)
+- **Notificación**: WhatsApp en fallo (trap ERR + `die`) y resumen al finalizar
 - **Qué incluye**:
-  - Dump de PostgreSQL (`chae` database)
-  - Tarballs de configs de todos los servicios Docker
+  - Dump de PostgreSQL (`chae` database, verificado con gzip -t + cabecera pg_dumpall)
+  - Snapshot online consistente de la SQLite de Jellyfin (quick_check)
+  - Tarballs de configs de todos los servicios Docker (tolera archivos cambiados en vivo)
 - **Retención**: 14 días (se borran los más viejos automáticamente)
+- **Lock**: `flock` evita corridas solapadas
+
+## Docker: Hardening
+
+- Imágenes pineadas por digest (`repo@sha256:...`) en todos los compose; recrear no cambia versión
+- Healthchecks propios en arrs (`/ping`), Jellyfin (`/health`), Jellyseerr, AdGuard, Postgres (`pg_isready`), Maintainerr
+- Límites de memoria: tdarr-node 8g, tdarr 2g, subgenai 4g
+- Postgres: credenciales en `services/postgres/.env` (nunca en el compose); puerto solo en localhost
+- Maintainerr y Portainer tienen compose propio bajo `services/` (antes eran contenedores sueltos irreproducibles)
+- Sin contenedores huérfanos (watchtower y `-pre-*` eliminados)
+
+## Logs
+
+- Rotación diaria 4:30am vía logrotate nivel usuario: `~/.config/logrotate/chae.conf` (estado en `~/.local/state/logrotate.status`)
+- Aplica a `scripts/*.log` y `auto_translate.log`: rota a partir de 5MB, conserva 3 comprimidos
 
 ---
 

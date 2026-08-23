@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+MEDIA_SERVER_IP="${MEDIA_SERVER_IP:-192.168.1.100}"
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -147,22 +148,22 @@ case "$last_status" in
 esac
 
 services_json="$({
-  service_json 'Jellyfin' 'chae-jellyfin' 'http://192.168.1.100:8096' '8096' 'Streaming principal de peliculas, series y anime.' 'media'
-  service_json 'Jellyseerr' 'chae-jellyseerr' 'http://192.168.1.100:5055' '5055' 'Pedidos y autoservicio de contenido.' 'requests'
-  service_json 'Sonarr' 'chae-sonarr' 'http://192.168.1.100:8989' '8989' 'Automatizacion de series.' 'arr'
-  service_json 'Radarr' 'chae-radarr' 'http://192.168.1.100:7878' '7878' 'Automatizacion de peliculas.' 'arr'
-  service_json 'Bazarr' 'chae-bazarr' 'http://192.168.1.100:6767' '6767' 'Subtitulos automaticos para series y peliculas.' 'subtitles'
-  service_json 'Tdarr' 'chae-tdarr' 'http://192.168.1.100:8265' '8265/8266' 'Remux, limpieza de pistas y ahorro de espacio.' 'transcode'
+  service_json 'Jellyfin' 'chae-jellyfin' "http://${MEDIA_SERVER_IP}:8096" '8096' 'Streaming principal de peliculas, series y anime.' 'media'
+  service_json 'Jellyseerr' 'chae-jellyseerr' "http://${MEDIA_SERVER_IP}:5055" '5055' 'Pedidos y autoservicio de contenido.' 'requests'
+  service_json 'Sonarr' 'chae-sonarr' "http://${MEDIA_SERVER_IP}:8989" '8989' 'Automatizacion de series.' 'arr'
+  service_json 'Radarr' 'chae-radarr' "http://${MEDIA_SERVER_IP}:7878" '7878' 'Automatizacion de peliculas.' 'arr'
+  service_json 'Bazarr' 'chae-bazarr' "http://${MEDIA_SERVER_IP}:6767" '6767' 'Subtitulos automaticos para series y peliculas.' 'subtitles'
+  service_json 'Tdarr' 'chae-tdarr' "http://${MEDIA_SERVER_IP}:8265" '8265/8266' 'Remux, limpieza de pistas y ahorro de espacio.' 'transcode'
   service_json 'Tdarr Node' 'chae-tdarr-node' '' 'interno' 'Worker de transcode conectado al server.' 'transcode'
-  service_json 'Prowlarr' 'chae-prowlarr' 'http://192.168.1.100:9696' '9696' 'Indexadores y trackers.' 'arr'
-  service_json 'qBittorrent' 'chae-qbittorrent' 'http://192.168.1.100:8080' '8080/6881' 'Cliente torrent principal.' 'download'
-  service_json 'Uptime Kuma' 'chae-uptime-kuma' 'http://192.168.1.100:3001' '3001' 'Monitoreo y health checks.' 'monitoring'
+  service_json 'Prowlarr' 'chae-prowlarr' "http://${MEDIA_SERVER_IP}:9696" '9696' 'Indexadores y trackers.' 'arr'
+  service_json 'qBittorrent' 'chae-qbittorrent' "http://${MEDIA_SERVER_IP}:8080" '8080/6881' 'Cliente torrent principal.' 'download'
+  service_json 'Uptime Kuma' 'chae-uptime-kuma' "http://${MEDIA_SERVER_IP}:3001" '3001' 'Monitoreo y health checks.' 'monitoring'
   service_json 'Flaresolverr' 'chae-flaresolverr' '' '8191' 'Bypass de Cloudflare para trackers.' 'support'
-  service_json 'SubgenAI' 'subgenai' 'http://192.168.1.100:9000' '9000' 'Generacion auxiliar de subtitulos y automatizaciones.' 'support'
+  service_json 'SubgenAI' 'subgenai' "http://${MEDIA_SERVER_IP}:9000" '9000' 'Generacion auxiliar de subtitulos y automatizaciones.' 'support'
   service_json 'WhatsApp Bot' 'jellyfin-whatsapp-bot' '' '3555' 'Bot y automatizacion alrededor de Jellyfin.' 'automation'
   service_json 'Postgres' 'chae-postgres' '' '5432' 'Base de datos interna del stack.' 'database'
-  service_json 'Portainer' 'portainer' 'https://192.168.1.100:9443' '9443' 'Administracion de Docker.' 'ops'
-  service_json 'Maintainerr' 'chae-maintainerr' 'http://192.168.1.100:8787' '8787' 'Limpieza automatica de contenido.' 'media'
+  service_json 'Portainer' 'portainer' "https://${MEDIA_SERVER_IP}:9443" '9443' 'Administracion de Docker.' 'ops'
+  service_json 'Maintainerr' 'chae-maintainerr' "http://${MEDIA_SERVER_IP}:8787" '8787' 'Limpieza automatica de contenido.' 'media'
   service_json 'Watchtower' 'watchtower' '' '' 'Deshabilitado; las actualizaciones se ejecutan bajo demanda con validacion y rollback.' 'ops'
 } | jq -s '.')"
 
@@ -247,7 +248,7 @@ jq -n \
     services:$services,
     storage:$storage,
     tdarr:{
-      url:"http://192.168.1.100:8265",
+      url:"http://${MEDIA_SERVER_IP}:8265",
       ready:(($tdarrServerStatus == "running") and ($tdarrNodeStatus == "running")),
       serverStatus:$tdarrServerStatus,
       nodeStatus:$tdarrNodeStatus,

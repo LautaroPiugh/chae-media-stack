@@ -3,6 +3,7 @@
 set -u
 
 JSON="${XDG_CACHE_HOME:-$HOME/.cache}/stack-dashboard/stack-data.json"
+MEDIA_SERVER_IP="${MEDIA_SERVER_IP:-192.168.1.100}"
 RECOVERY_DIR="${MEDIA_MOUNT_STATE_DIR:-/home/chae/.local/state/media-mount-recovery}"
 WD_LOG="/var/log/media-pool-watchdog.log"
 REC_LOG="$RECOVERY_DIR/recovery.log"
@@ -37,7 +38,7 @@ PYEOF
     (
       curl_args=(-s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 3)
       [[ "$url" == https://* ]] && curl_args+=(--insecure)
-      code=$(curl "${curl_args[@]}" "${url/192.168.1.100/127.0.0.1}" 2>/dev/null || echo 000)
+      code=$(curl "${curl_args[@]}" "${url/$MEDIA_SERVER_IP/127.0.0.1}" 2>/dev/null || echo 000)
       printf '%s' "$code" > "$TMPDIR_D/http.$ctr"
     ) &
   done < "$TMPDIR_D/list"
