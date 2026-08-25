@@ -17,5 +17,5 @@ services:
       MODEL_PATH: ./models
     ports:
       - "127.0.0.1:9000:9000"
-      - "192.168.1.100:9000:9000"
+      - "${MEDIA_SERVER_IP:-192.168.1.100}:9000:9000"
     mem_limit: 4g

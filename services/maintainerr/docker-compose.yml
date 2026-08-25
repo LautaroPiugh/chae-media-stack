@@ -7,7 +7,7 @@ services:
       - TZ=America/Argentina/Buenos_Aires
     ports:
       - "127.0.0.1:8787:6246"
-      - "192.168.1.100:8787:6246"
+      - "${MEDIA_SERVER_IP:-192.168.1.100}:8787:6246"
     volumes:
       - ./data:/opt/data
     healthcheck:

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Cargar configuración local (MEDIA_SERVER_IP, etc.)
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -f "$DIR/.env" ]; then set -a; . "$DIR/.env"; set +a; fi
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'

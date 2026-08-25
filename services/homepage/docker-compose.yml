@@ -5,13 +5,13 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:3003:3000"
-      - "192.168.1.100:3003:3000"
+      - "${MEDIA_SERVER_IP:-192.168.1.100}:3003:3000"
     volumes:
       - ./config:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - TZ=America/Argentina/Buenos_Aires
-      - HOMEPAGE_ALLOWED_HOSTS=127.0.0.1:3003,localhost:3003,192.168.1.100:3003
+      - HOMEPAGE_ALLOWED_HOSTS=127.0.0.1:3003,localhost:3003,${MEDIA_SERVER_IP:-192.168.1.100}:3003
     networks:
       - qbittorrent_default
 

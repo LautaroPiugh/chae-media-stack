@@ -4,10 +4,10 @@ services:
     container_name: chae-adguard
     restart: unless-stopped
     ports:
-      - "192.168.1.100:53:53/tcp"
-      - "192.168.1.100:53:53/udp"
+      - "${MEDIA_SERVER_IP:-192.168.1.100}:53:53/tcp"
+      - "${MEDIA_SERVER_IP:-192.168.1.100}:53:53/udp"
       - "127.0.0.1:3002:3000/tcp"
-      - "192.168.1.100:3002:3000/tcp"
+      - "${MEDIA_SERVER_IP:-192.168.1.100}:3002:3000/tcp"
     volumes:
       - ./conf:/opt/adguardhome/conf
       - ./work:/opt/adguardhome/work

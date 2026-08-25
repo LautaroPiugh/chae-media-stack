@@ -2,6 +2,9 @@
 set -Eeuo pipefail
 
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Cargar configuración local (MEDIA_SERVER_IP, etc.)
+if [ -f "$DIR/.env" ]; then set -a; . "$DIR/.env"; set +a; fi
 export COMPOSE_PROJECT_NAME=media-stack
 
 SERVICES=(
