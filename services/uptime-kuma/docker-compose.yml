@@ -10,7 +10,7 @@ services:
       - ./data:/app/data
     environment:
       - UPTIME_KUMA_PORT=3001
-      - TZ=America/Argentina/Buenos_Aires
+      - TZ=${TZ:-Etc/UTC}
     networks:
       - media
       - jellyfin

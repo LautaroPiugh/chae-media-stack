@@ -4,7 +4,28 @@ Guía paso a paso para instalar y configurar el stack completo desde cero.
 
 ---
 
+## 0. Instalación asistida (recomendada)
+
+Con Docker y git ya instalados, el instalador interactivo hace todo:
+pregunta IP, rutas y zona horaria, genera el `.env`, despliega los servicios
+elegidos y espera que queden sanos.
+
+```bash
+git clone https://github.com/LautaroPiugh/chae-media-stack.git
+cd chae-media-stack
+./install.sh            # wizard temático 🐯
+```
+
+Flags útiles: `--dry-run` (simula), `--yes` (defaults), `--update`,
+`--uninstall`. Después completá lo manual con las secciones siguientes
+y corré `scripts/sync-homepage-keys.sh` cuando tengas las API keys.
+
+Esta guía cubre el proceso manual completo si preferís entender cada pieza.
+
+---
+
 ## 1. Requisitos de Hardware
+
 
 | Componente | Mínimo | Recomendado |
 |------------|--------|-------------|

@@ -34,7 +34,9 @@ for svc in "${SERVICES[@]}"; do
     continue
   fi
   echo "  → $svc..."
-  docker compose -f "$compose_dir/docker-compose.yml" up -d 2>&1 | sed 's/^/    /'
+  compose_args=(-f "$compose_dir/docker-compose.yml")
+    [ -f "$compose_dir/docker-compose.override.yml" ] && compose_args+=(-f "$compose_dir/docker-compose.override.yml")
+    docker compose "${compose_args[@]}" up -d 2>&1 | sed 's/^/    /'
 done
 
 echo "  → jellyfin-whatsapp-bot..."

@@ -4,22 +4,18 @@ services:
     container_name: chae-jellyfin
     restart: unless-stopped
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/Argentina/Buenos_Aires
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Etc/UTC}
       - JELLYFIN_PublishedServerUri=http://${MEDIA_SERVER_IP:-192.168.1.100}:8096
     volumes:
       - ./config:/config
       - ./theme/scyfin-theme.css:/usr/share/jellyfin/web/scyfin-theme.css:ro
       - ./theme/theme-oled.css:/usr/share/jellyfin/web/theme-oled.css:ro
-      - /mnt/media:/media:ro
+      - ${MEDIA_ROOT:-/opt/media}:/media:ro
     ports:
       - "127.0.0.1:8096:8096"
       - "${MEDIA_SERVER_IP:-192.168.1.100}:8096:8096"
-    devices:
-      - /dev/dri/renderD128:/dev/dri/renderD128
-    group_add:
-      - "107"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8096/health"]
       interval: 60s

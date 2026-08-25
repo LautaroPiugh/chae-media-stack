@@ -4,9 +4,9 @@ services:
     container_name: chae-tdarr
     restart: unless-stopped
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/Argentina/Buenos_Aires
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Etc/UTC}
       - UMASK_SET=022
       - serverIP=0.0.0.0
       - serverPort=8266
@@ -22,18 +22,14 @@ services:
       - ./server:/app/server
       - ./configs:/app/configs
       - ./logs:/app/logs
-      - /mnt/media:/media
-      - /mnt/media2/downloads:/downloads
-      - /mnt/media2/downloads/tdarr-cache:/temp
+      - ${MEDIA_ROOT:-/opt/media}:/media
+      - ${DOWNLOADS_ROOT:-/opt/downloads}:/downloads
+      - ${DOWNLOADS_ROOT:-/opt/downloads}/tdarr-cache:/temp
     ports:
       - "127.0.0.1:8265:8265"
       - "${MEDIA_SERVER_IP:-192.168.1.100}:8265:8265"
     networks:
       - qbittorrent_default
-    devices:
-      - /dev/dri:/dev/dri
-    group_add:
-      - "107"
     mem_limit: 2g
 
   tdarr-node:
@@ -43,9 +39,9 @@ services:
     depends_on:
       - tdarr
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/Argentina/Buenos_Aires
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Etc/UTC}
       - UMASK_SET=022
       - nodeName=chae-tdarr-node
       - serverIP=chae-tdarr
@@ -64,15 +60,11 @@ services:
     volumes:
       - ./configs:/app/configs
       - ./logs:/app/logs
-      - /mnt/media:/media
-      - /mnt/media2/downloads:/downloads
-      - /mnt/media2/downloads/tdarr-cache:/temp
+      - ${MEDIA_ROOT:-/opt/media}:/media
+      - ${DOWNLOADS_ROOT:-/opt/downloads}:/downloads
+      - ${DOWNLOADS_ROOT:-/opt/downloads}/tdarr-cache:/temp
     networks:
       - qbittorrent_default
-    devices:
-      - /dev/dri:/dev/dri
-    group_add:
-      - "107"
     mem_limit: 8g
 
 networks:

@@ -5,7 +5,7 @@ services:
     container_name: chae-jellyseerr
     restart: unless-stopped
     environment:
-      - TZ=America/Argentina/Buenos_Aires
+      - TZ=${TZ:-Etc/UTC}
     volumes:
       - ./config:/app/config
     ports:

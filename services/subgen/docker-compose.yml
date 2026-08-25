@@ -6,7 +6,7 @@ services:
     volumes:
       - './models:/subgen/models'
       - './subgen.env:/subgen/subgen.env:ro'
-      - '/mnt/media:/media:ro'
+      - '${MEDIA_ROOT:-/opt/media}:/media:ro'
     environment:
       LOG_LEVEL: debug
       NAME_SERVERS: 9.9.9.9

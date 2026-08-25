@@ -4,15 +4,15 @@ services:
     container_name: chae-qbittorrent
     restart: unless-stopped
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/Argentina/Buenos_Aires
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Etc/UTC}
       - WEBUI_PORT=8080
       - TORRENTING_PORT=6881
     volumes:
       - ./config:/config
-      - /mnt/media2/downloads:/downloads
-      - /mnt/media:/media
+      - ${DOWNLOADS_ROOT:-/opt/downloads}:/downloads
+      - ${MEDIA_ROOT:-/opt/media}:/media
     ports:
       - "127.0.0.1:8080:8080"
       - "${MEDIA_SERVER_IP:-192.168.1.100}:8080:8080"

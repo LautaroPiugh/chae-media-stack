@@ -16,6 +16,8 @@
 !LICENSE
 !.gitignore
 !fix-media-mounts.sh
+!install.sh
+!bootstrap.sh
 !index.html
 !index.html.new
 !RESUMEN_MEDIA_STACK_*.md
@@ -83,6 +85,9 @@ Thumbs.db
 
 # Docker internal state
 .docker/
+
+# Overrides locales por máquina
+**/docker-compose.override.yml
 
 # Backups and caches
 **/*.bak
