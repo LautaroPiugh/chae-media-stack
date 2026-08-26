@@ -326,7 +326,6 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 | `/home/chae/scripts/omdb_cache.json` | Cache de IMDB IDs de episodios |
 | `/home/chae/services/*/docker-compose.yml` | Config de cada servicio Docker |
 | `/etc/systemd/system/cloudflared.service` | Servicio del túnel Cloudflare |
-| `/home/chae/_archived/` | Código archivado (ej: notifier viejo) |
 
 ---
 

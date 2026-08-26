@@ -7,8 +7,6 @@
 !/scripts/
 !/nginx-proxy-manager/
 !/jellyfin-proxy/
-!/dashboard-staging/
-!/_archived/
 !/assets/
 !/apps/
 !README.md
@@ -18,9 +16,6 @@
 !fix-media-mounts.sh
 !install.sh
 !bootstrap.sh
-!index.html
-!index.html.new
-!RESUMEN_MEDIA_STACK_*.md
 !INSTALL.md
 !docker-compose.yml
 !scripts/health-check.sh
