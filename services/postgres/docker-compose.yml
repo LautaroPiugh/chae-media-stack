@@ -13,3 +13,13 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - ./data:/var/lib/postgresql/data
+    networks:
+      - postgres_default
+      - qbittorrent_default
+
+networks:
+  postgres_default:
+    external: true
+  qbittorrent_default:
+    external: true
+    name: qbittorrent_default

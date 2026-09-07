@@ -18,6 +18,7 @@ Servidor multimedia argentino con 15+ servicios Docker, bot de WhatsApp, túnel 
 | Disco datos 3 | HDD 1TB → `/mnt/media3` (ext4) — biblioteca activa (series/películas) |
 | Disco datos 4 | HDD 1TB Seagate → `/mnt/media4` (ext4) — biblioteca de películas + destino de contenido nuevo (sep 2026) |
 | Pool mergerfs | `/mnt/media` = media1 + media2 + media3 + media4, ~3.0T total |
+| DB | Radarr/Sonarr/Prowlarr en PostgreSQL (chae-postgres, sep 2026); Bazarr/Jellyfin siguen en SQLite |
 
 ### Pool mergerfs (`/mnt/media`)
 
