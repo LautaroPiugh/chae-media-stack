@@ -27,6 +27,10 @@ SERVICES=(
   "Uptime Kuma:chae-uptime-kuma:http:3001"
   "Homepage:chae-homepage:http:3003"
   "WhatsApp Bot:jellyfin-whatsapp-bot:http:3555:/health"
+  "AdGuard:chae-adguard:http:3002"
+  "Maintainerr:chae-maintainerr:http:8787"
+  "Dozzle:chae-dozzle:http:8081"
+  "Scrutiny:chae-scrutiny:http:8082"
   "Portainer:portainer:https:9443"
 )
 

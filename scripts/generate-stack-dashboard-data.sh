@@ -205,7 +205,10 @@ services_json="$({
   service_json 'Postgres' 'chae-postgres' '' '5432' 'Base de datos interna del stack.' 'database'
   service_json 'Portainer' 'portainer' "https://${MEDIA_SERVER_IP}:9443" '9443' 'Administracion de Docker.' 'ops'
   service_json 'Maintainerr' 'chae-maintainerr' "http://${MEDIA_SERVER_IP}:8787" '8787' 'Limpieza automatica de contenido.' 'media'
-  service_json 'Watchtower' 'watchtower' '' '' 'Deshabilitado; las actualizaciones se ejecutan bajo demanda con validacion y rollback.' 'ops'
+  service_json 'AdGuard' 'chae-adguard' "http://${MEDIA_SERVER_IP}:3002" '53/3002' 'DNS con bloqueo de publicidad y trackers.' 'monitoring'
+  service_json 'Homepage' 'chae-homepage' "http://${MEDIA_SERVER_IP}:3003" '3003' 'Panel principal del stack.' 'ops'
+  service_json 'Dozzle' 'chae-dozzle' "http://${MEDIA_SERVER_IP}:8081" '8081' 'Visor de logs de todos los contenedores.' 'ops'
+  service_json 'Scrutiny' 'chae-scrutiny' "http://${MEDIA_SERVER_IP}:8082" '8082' 'Salud SMART de los discos.' 'monitoring'
 } | jq -s '.')"
 
 storage_json_all="$({

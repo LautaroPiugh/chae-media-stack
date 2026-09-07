@@ -56,7 +56,7 @@ dash_color="$GREEN"
 
 wdog_color="$GREEN"
 wdog_label="wdog:ok"
-if ! systemctl is-active --quiet media-pool-watchdog.timer 2>/dev/null; then
+if ! crontab -l 2>/dev/null | grep -q 'media-mount-recovery.sh'; then
   wdog_color="$RED"
   wdog_label="wdog:OFF"
 fi

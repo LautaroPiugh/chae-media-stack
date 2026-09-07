@@ -323,6 +323,10 @@ CONFIG_DIRS=(
   "jellyseerr:$PROJECT_DIR/services/jellyseerr"
   "tdarr:$PROJECT_DIR/services/tdarr"
   "uptime-kuma:$PROJECT_DIR/services/uptime-kuma"
+  "homepage:$PROJECT_DIR/services/homepage"
+  "qbitmanage:$PROJECT_DIR/services/qbitmanage"
+  "recyclarr:$PROJECT_DIR/services/recyclarr"
+  "scrutiny:$PROJECT_DIR/services/scrutiny"
 )
 
 tar_archive() {
@@ -334,6 +338,7 @@ tar_archive() {
   tar czf "$archive" \
     --exclude='*/config/*.db-wal' \
     --exclude='*/config/*.db-shm' \
+    --exclude='*/influxdb/*' \
     --warning=no-file-changed \
     "$@" || rc=$?
   if [[ $rc -gt 1 ]]; then
