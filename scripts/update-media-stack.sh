@@ -99,7 +99,6 @@ DENYLIST=(
   homepage
   uptime-kuma
   maintainerr
-  nginx-proxy-manager
 )
 
 status='failed'

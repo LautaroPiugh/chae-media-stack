@@ -17,7 +17,7 @@ fi
 
 echo
 echo -e "${B}── 2/3: recovery de contenedores ──${N}"
-if /home/chae/scripts/media-mount-recovery.sh; then
+if /home/chae/stack/scripts/media-mount-recovery.sh; then
   echo -e " ${G}recovery OK${N}"
 else
   rc=$?
@@ -28,10 +28,10 @@ sleep 1
 echo
 echo -e "${B}── 3/3: estado resultante ──${N}"
 findmnt /mnt/media >/dev/null 2>&1 && echo -e " pool /mnt/media: ${G}montado${N}" || echo -e " pool /mnt/media: ${Y}NO montado${N}"
-mountpoint -q /mnt/media1 && mountpoint -q /mnt/media2 \
-  && echo -e " ramas media1/media2: ${G}montadas${N}" || echo -e " ramas: ${Y}alguna caída${N}"
+mountpoint -q /mnt/media1 && mountpoint -q /mnt/media2 && mountpoint -q /mnt/media3 && mountpoint -q /mnt/media4 \
+  && echo -e " ramas media1/media2/media3/media4: ${G}montadas${N}" || echo -e " ramas: ${Y}alguna caída${N}"
 
-state="$(cat "${MEDIA_MOUNT_STATE_DIR:-/home/chae/.local/state/media-mount-recovery}/last_state" 2>/dev/null || echo unknown)"
+state="$(cat "${MEDIA_MOUNT_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/media-mount-recovery}/last_state" 2>/dev/null || echo unknown)"
 echo -e " estado recovery: $state"
 
 echo

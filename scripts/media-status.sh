@@ -3,9 +3,13 @@ set -Eeuo pipefail
 
 MEDIA1_PATH="${MEDIA1_PATH:-/mnt/media1}"
 MEDIA2_PATH="${MEDIA2_PATH:-/mnt/media2}"
+MEDIA3_PATH="${MEDIA3_PATH:-/mnt/media3}"
+MEDIA4_PATH="${MEDIA4_PATH:-/mnt/media4}"
 MEDIA_POOL_PATH="${MEDIA_POOL_PATH:-/mnt/media}"
 MEDIA1_UUID="${MEDIA1_UUID:-E41C8ED01C8E9CE4}"
 MEDIA2_UUID="${MEDIA2_UUID:-3FD22A422077368D}"
+MEDIA3_UUID="${MEDIA3_UUID:-f5b48469-5ece-4e75-a90d-7ff6a93c4dfe}"
+MEDIA4_UUID="${MEDIA4_UUID:-a4325f7b-fd22-4a64-8f1e-fd90483740c5}"
 
 branch_is_healthy() {
   local path="$1"
@@ -43,7 +47,7 @@ pool_has_expected_branches() {
     branches_found=0
     mountpoint_found=0
     for argument in "${arguments[@]:1}"; do
-      [[ "$argument" == "$MEDIA1_PATH:$MEDIA2_PATH" ]] && branches_found=1
+      [[ "$argument" == "$MEDIA1_PATH:$MEDIA2_PATH:$MEDIA3_PATH:$MEDIA4_PATH" ]] && branches_found=1
       [[ "$argument" == "$MEDIA_POOL_PATH" ]] && mountpoint_found=1
     done
     if [[ "$branches_found" -eq 1 && "$mountpoint_found" -eq 1 ]]; then
@@ -55,6 +59,8 @@ pool_has_expected_branches() {
 
 if branch_is_healthy "$MEDIA1_PATH" "$MEDIA1_UUID" \
   && branch_is_healthy "$MEDIA2_PATH" "$MEDIA2_UUID" \
+  && branch_is_healthy "$MEDIA3_PATH" "$MEDIA3_UUID" \
+  && branch_is_healthy "$MEDIA4_PATH" "$MEDIA4_UUID" \
   && mountpoint -q "$MEDIA_POOL_PATH" \
   && [[ "$(findmnt -rn -o FSTYPE --target "$MEDIA_POOL_PATH" 2>/dev/null || true)" == 'fuse.mergerfs' ]] \
   && pool_has_expected_branches \

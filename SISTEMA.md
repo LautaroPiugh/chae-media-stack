@@ -11,15 +11,17 @@ Servidor multimedia argentino con 15+ servicios Docker, bot de WhatsApp, túnel 
 | Componente | Detalle |
 |-----------|---------|
 | CPU | x86_64 |
-| RAM | 16GB |
-| Disco sistema | SSD 100G (LVM, 49% usado) |
-| Disco datos 1 | HDD 465G → `/mnt/media1` (NTFS, 17% usado) |
-| Disco datos 2 | HDD 699G → `/mnt/media2` (NTFS, 78% usado) |
-| Pool mergerfs | `/mnt/media` = media1 + media2, 1.2T total (54% usado) |
+| RAM | 32GB (25,6G disponibles en uso normal) |
+| Disco sistema | SSD 220G (LVM ext4, 20% usado) |
+| Disco datos 1 | HDD externo 465G → `/mnt/media1` (NTFS) — espejo de backups (biblioteca mudada a media4 en sep 2026) |
+| Disco datos 2 | HDD externo 699G → `/mnt/media2` (NTFS) — descargas y backups |
+| Disco datos 3 | HDD 1TB → `/mnt/media3` (ext4) — biblioteca activa (series/películas) |
+| Disco datos 4 | HDD 1TB Seagate → `/mnt/media4` (ext4) — biblioteca de películas + destino de contenido nuevo (sep 2026) |
+| Pool mergerfs | `/mnt/media` = media1 + media2 + media3 + media4, ~3.0T total |
 
 ### Pool mergerfs (`/mnt/media`)
 
-Combina ambos discos. Política: `mfs` (most free space — escribe en el disco con más espacio libre). Mínimo 20G libres por disco.
+Combina los cuatro discos. Política: `mfs` (most free space — escribe en el disco con más espacio libre). Mínimo 20G libres por disco. El contenido nuevo (descargas e importaciones de Radarr/Sonarr) aterriza en el disco con más espacio (media3 o media4, ambos ext4 de 916G).
 
 ```
 /mnt/media/
@@ -35,7 +37,11 @@ Combina ambos discos. Política: `mfs` (most free space — escribe en el disco 
 
 ### Script de recuperación
 
-`/home/chae/scripts/media-mount-recovery.sh` corre cada 2 minutos vía cron. Si detecta que `/mnt/media` no está montado, espera a que se recupere y reinicia: Radarr, Sonarr, Bazarr, Jellyfin, qBittorrent.
+`/home/chae/stack/scripts/media-mount-recovery.sh` corre cada 2 minutos vía cron. Valida las 4 ramas (media1, media2, media3, media4) y el pool mergerfs; si algo no está sano detiene los contenedores consumidores, y los reinicia solo cuando todo vuelve a estar correcto.
+
+### Limpieza manual (botón del panel)
+
+El panel Homepage (192.168.0.200:3003) tiene la tarjeta **"Limpieza del Stack"** (grupo Mantenimiento). El clic dispara la limpieza vía `chae-cleanup-api.service` (systemd, puerto 3655, script `/home/chae/stack/scripts/cleanup-stack.sh`): purga `$RECYCLE.BIN` de los discos NTFS (media1 y media2), cachés de transcode/logs de Jellyfin y prune de imágenes Docker colgantes; reporta espacio liberado y avisa por WhatsApp.
 
 ---
 
@@ -106,8 +112,8 @@ Auto-update: `cloudflared-update.service` corre `cloudflared update` y reinicia 
 
 Bot personal para administrar el media stack desde WhatsApp. Usa `@whiskeysockets/baileys` (WhatsApp Web).
 
-**Código**: `/home/chae/jellyfin-whatsapp-bot/`
-**Docker Compose**: `/home/chae/jellyfin-whatsapp-bot/docker-compose.yml`
+**Código**: `/home/chae/stack/jellyfin-whatsapp-bot/`
+**Docker Compose**: `/home/chae/stack/jellyfin-whatsapp-bot/docker-compose.yml`
 **Puerto**: 3555
 **Número**: `TU_NUMERO` (dueño/admin)
 **Para reconectar**: el bot genera QR al iniciar si no hay sesión válida. Usar `/reconectar` si se pierde la sesión.
@@ -159,7 +165,7 @@ Para usar comandos admin, enviar `/registraradmin` una vez desde el número del 
 
 ### Configuración
 
-Archivo: `/home/chae/jellyfin-whatsapp-bot/.env`
+Archivo: `/home/chae/stack/jellyfin-whatsapp-bot/.env`
 
 ```env
 PORT=3555
@@ -195,11 +201,11 @@ WHATSAPP_UPDATE_NOTIFY_TOKEN=CHANGEME
 
 ### Script Principal: `check_es_subs.py`
 
-**Archivo**: `/home/chae/scripts/check_es_subs.py`
-**ENV**: `/home/chae/scripts/check_es_subs.env`
-**Log**: `/home/chae/scripts/check_es_subs.log`
+**Archivo**: `/home/chae/stack/scripts/check_es_subs.py`
+**ENV**: `/home/chae/stack/scripts/check_es_subs.env`
+**Log**: `/home/chae/stack/scripts/check_es_subs.log`
 **Cron**: Cada 6 horas (`0 */6 * * *`)
-**Cache OMDb**: `/home/chae/scripts/omdb_cache.json`
+**Cache OMDb**: `/home/chae/stack/scripts/omdb_cache.json`
 
 #### Qué hace
 
@@ -216,12 +222,12 @@ WHATSAPP_UPDATE_NOTIFY_TOKEN=CHANGEME
 #### Modo CLI (para el bot)
 
 ```bash
-python3 /home/chae/scripts/check_es_subs.py --translate-movie "Título de película"
+python3 /home/chae/stack/scripts/check_es_subs.py --translate-movie "Título de película"
 ```
 
 ### Script Secundario: `auto_translate.py`
 
-**Archivo**: `/home/chae/services/bazarr/auto_translate.py`
+**Archivo**: `/home/chae/stack/services/bazarr/auto_translate.py`
 **Cron**: Cada 10 minutos
 Traduce subs EN→ES recién descargados por Bazarr usando Gemini AI.
 
@@ -244,11 +250,11 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 
 | Cada | Comando | Descripción |
 |------|---------|-------------|
-| 2 minutos | `/home/chae/scripts/media-mount-recovery.sh` | Verifica montura de `/mnt/media`, reinicia servicios si se recuperó |
-| 5 minutos | `/home/chae/scripts/generate-stack-dashboard-data.sh` | Genera cache JSON para dashboard |
-| 10 minutos | `python3 /home/chae/services/bazarr/auto_translate.py` | Traduce subs EN bjados por Bazarr vía Gemini |
-| 6 horas | `python3 /home/chae/scripts/check_es_subs.py` | Verifica y descarga subtítulos ES faltantes |
-| 3am daily | `/home/chae/scripts/backup-stack.sh` | Backup PostgreSQL + configs a `/mnt/media2/backups/stack/` (retención 14 días) |
+| 2 minutos | `/home/chae/stack/scripts/media-mount-recovery.sh` | Verifica montura de `/mnt/media`, reinicia servicios si se recuperó |
+| 5 minutos | `/home/chae/stack/scripts/generate-stack-dashboard-data.sh` | Genera cache JSON para dashboard |
+| 10 minutos | `python3 /home/chae/stack/services/bazarr/auto_translate.py` | Traduce subs EN bjados por Bazarr vía Gemini |
+| 6 horas | `python3 /home/chae/stack/scripts/check_es_subs.py` | Verifica y descarga subtítulos ES faltantes |
+| 3am daily | `/home/chae/stack/scripts/backup-stack.sh` | Backup PostgreSQL + configs a `/mnt/media2/backups/stack/` (retención 14 días) |
 | Manual por WhatsApp | `media-update-broker` | Actualiza la allowlist Docker uno por uno y se detiene ante fallos |
 | on-demand | `./scripts/start-stack.sh` | Inicia todos los servicios en orden |
 | on-demand | `./scripts/stop-stack.sh` | Detiene todos los servicios (orden inverso) |
@@ -318,13 +324,13 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 
 | Archivo | Propósito |
 |---------|-----------|
-| `/home/chae/jellyfin-whatsapp-bot/.env` | API keys del bot |
-| `/home/chae/jellyfin-whatsapp-bot/src/server.js` | Servidor Express del bot |
-| `/home/chae/jellyfin-whatsapp-bot/src/commands/index.js` | Enrutador de comandos WhatsApp |
-| `/home/chae/scripts/check_es_subs.py` | Script principal de subtítulos |
-| `/home/chae/scripts/check_es_subs.env` | API keys del script de subs |
-| `/home/chae/scripts/omdb_cache.json` | Cache de IMDB IDs de episodios |
-| `/home/chae/services/*/docker-compose.yml` | Config de cada servicio Docker |
+| `/home/chae/stack/jellyfin-whatsapp-bot/.env` | API keys del bot |
+| `/home/chae/stack/jellyfin-whatsapp-bot/src/server.js` | Servidor Express del bot |
+| `/home/chae/stack/jellyfin-whatsapp-bot/src/commands/index.js` | Enrutador de comandos WhatsApp |
+| `/home/chae/stack/scripts/check_es_subs.py` | Script principal de subtítulos |
+| `/home/chae/stack/scripts/check_es_subs.env` | API keys del script de subs |
+| `/home/chae/stack/scripts/omdb_cache.json` | Cache de IMDB IDs de episodios |
+| `/home/chae/stack/services/*/docker-compose.yml` | Config de cada servicio Docker |
 | `/etc/systemd/system/cloudflared.service` | Servicio del túnel Cloudflare |
 
 ---
@@ -358,7 +364,7 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 
 ## Backup
 
-Los backups corren cada día a las 3am vía `/home/chae/scripts/backup-stack.sh`:
+Los backups corren cada día a las 3am vía `/home/chae/stack/scripts/backup-stack.sh`:
 
 - **Destino**: `/mnt/media2/backups/stack/`
 - **Espejo**: copia rsync a `/mnt/media1/backups/stack/` (disco físico independiente de la rama mergerfs)

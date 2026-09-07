@@ -186,7 +186,7 @@ fi
 endstep
 
 # ══════════════════════════ 3 · ESCRIBIR CONFIG ══════════════════════════
-step "3/${STEP_TOTAL} · Generar configuración (.env + symlinks)"
+step "3/${STEP_TOTAL} · Generar configuración (.env + copias locales)"
 
 if [ -f .env ] && [ "$DRY_RUN" != 1 ]; then
   cp .env ".env.backup-$(date +%Y%m%d-%H%M%S)"
@@ -218,9 +218,11 @@ else
   set -a; . ./.env; set +a
   for d in services/*/; do
     [ -f "$d/docker-compose.yml" ] || continue
-    ln -sfn "../../.env" "$d/.env"
+    env_copy=$(mktemp "$d/.env.XXXXXX")
+    install -m 600 .env "$env_copy"
+    mv -f "$env_copy" "$d/.env"
   done
-  ok ".env escrito + symlinks services/*/.env creados"
+  ok ".env escrito + archivos services/*/.env creados"
 fi
 if [ "$DRY_RUN" = 1 ]; then
   echo "${FB}┃${R}  ${DIM}[dry-run] crearía $MEDIA_ROOT y $DOWNLOADS_ROOT${R}"

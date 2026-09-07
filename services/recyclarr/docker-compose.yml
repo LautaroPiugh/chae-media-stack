@@ -1,0 +1,16 @@
+services:
+  recyclarr:
+    image: ghcr.io/recyclarr/recyclarr:8
+    container_name: chae-recyclarr
+    restart: unless-stopped
+    user: ${PUID:-1000}:${PGID:-1000}
+    environment:
+      - TZ=${TZ:-Etc/UTC}
+    volumes:
+      - ./config:/config
+    networks:
+      - qbittorrent_default
+
+networks:
+  qbittorrent_default:
+    external: true

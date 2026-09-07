@@ -6,13 +6,17 @@ MEDIA2_PATH="${MEDIA2_PATH:-/mnt/media2}"
 MEDIA_POOL_PATH="${MEDIA_POOL_PATH:-/mnt/media}"
 MEDIA1_UUID="${MEDIA1_UUID:-E41C8ED01C8E9CE4}"
 MEDIA2_UUID="${MEDIA2_UUID:-3FD22A422077368D}"
+MEDIA3_PATH="${MEDIA3_PATH:-/mnt/media3}"
+MEDIA3_UUID="${MEDIA3_UUID:-f5b48469-5ece-4e75-a90d-7ff6a93c4dfe}"
+MEDIA4_PATH="${MEDIA4_PATH:-/mnt/media4}"
+MEDIA4_UUID="${MEDIA4_UUID:-a4325f7b-fd22-4a64-8f1e-fd90483740c5}"
 DRY_RUN="${DRY_RUN:-0}"
 STOP_ON_FAILURE="${STOP_ON_FAILURE:-1}"
 STOP_TIMEOUT="${STOP_TIMEOUT:-30}"
 START_TIMEOUT="${START_TIMEOUT:-30}"
 RECOVERY_RETRY_SECONDS="${RECOVERY_RETRY_SECONDS:-300}"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-STATE_DIR="${MEDIA_MOUNT_STATE_DIR:-$PROJECT_DIR/.local/state/media-mount-recovery}"
+STATE_DIR="${MEDIA_MOUNT_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/media-mount-recovery}"
 STATE_FILE="$STATE_DIR/last_state"
 STOPPED_FILE="$STATE_DIR/stopped-containers"
 LAST_ATTEMPT_FILE="$STATE_DIR/last-recovery-attempt"
@@ -87,6 +91,8 @@ media_is_healthy() {
 
   branch_is_healthy "$MEDIA1_PATH" "$MEDIA1_UUID" || return 1
   branch_is_healthy "$MEDIA2_PATH" "$MEDIA2_UUID" || return 1
+  branch_is_healthy "$MEDIA3_PATH" "$MEDIA3_UUID" || return 1
+  branch_is_healthy "$MEDIA4_PATH" "$MEDIA4_UUID" || return 1
   [[ -d "$MEDIA_POOL_PATH" ]] || { HEALTH_REASON="$MEDIA_POOL_PATH no existe"; return 1; }
   mountpoint -q "$MEDIA_POOL_PATH" || { HEALTH_REASON="$MEDIA_POOL_PATH no esta montado"; return 1; }
   fs_type="$(findmnt -rn -o FSTYPE --target "$MEDIA_POOL_PATH" 2>/dev/null || true)"
@@ -103,7 +109,7 @@ media_is_healthy() {
     branches_found=0
     mountpoint_found=0
     for argument in "${arguments[@]:1}"; do
-      [[ "$argument" == "$MEDIA1_PATH:$MEDIA2_PATH" ]] && branches_found=1
+      [[ "$argument" == "$MEDIA1_PATH:$MEDIA2_PATH:$MEDIA3_PATH:$MEDIA4_PATH" ]] && branches_found=1
       [[ "$argument" == "$MEDIA_POOL_PATH" ]] && mountpoint_found=1
     done
     if [[ "$branches_found" -eq 1 && "$mountpoint_found" -eq 1 ]]; then
@@ -112,7 +118,7 @@ media_is_healthy() {
     fi
   done
   [[ "$pool_process_found" -eq 1 ]] || {
-    HEALTH_REASON="$MEDIA_POOL_PATH no usa las ramas esperadas $MEDIA1_PATH:$MEDIA2_PATH"
+    HEALTH_REASON="$MEDIA_POOL_PATH no usa las ramas esperadas $MEDIA1_PATH:$MEDIA2_PATH:$MEDIA3_PATH:$MEDIA4_PATH"
     return 1
   }
   is_rw_mount "$MEDIA_POOL_PATH" || { HEALTH_REASON="$MEDIA_POOL_PATH no esta montado rw"; return 1; }
@@ -149,7 +155,9 @@ get_running_media_consumers() {
     while IFS= read -r source; do
       if [[ "$source" == "$MEDIA_POOL_PATH" || "$source" == "$MEDIA_POOL_PATH/"* \
         || "$source" == "$MEDIA1_PATH" || "$source" == "$MEDIA1_PATH/"* \
-        || "$source" == "$MEDIA2_PATH" || "$source" == "$MEDIA2_PATH/"* ]]; then
+        || "$source" == "$MEDIA2_PATH" || "$source" == "$MEDIA2_PATH/"* \
+        || "$source" == "$MEDIA3_PATH" || "$source" == "$MEDIA3_PATH/"* \
+        || "$source" == "$MEDIA4_PATH" || "$source" == "$MEDIA4_PATH/"* ]]; then
         if [[ -z "${seen[$name]:-}" ]]; then
           result+=("$name")
           seen["$name"]=1

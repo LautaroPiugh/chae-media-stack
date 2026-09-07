@@ -302,7 +302,7 @@ Maintainerr limpia contenido ya visto según reglas
 ## Almacenamiento
 
 ```
-/mnt/media/              pool mergerfs (~1.2T)
+/mnt/media/              pool mergerfs (~2.1T) = media1 + media2 + media3
   ├── movies/            películas (Radarr)
   ├── series/            series (Sonarr)
   ├── anime/             anime
@@ -310,10 +310,11 @@ Maintainerr limpia contenido ya visto según reglas
   ├── downloads/         torrents completados
   └── backups/           backups automáticos
 
-/mnt/media1/             HDD 1 (465G NTFS)
-/mnt/media2/             HDD 2 (699G NTFS)
+/mnt/media1/             HDD externo 1 (465G NTFS)
+/mnt/media2/             HDD externo 2 (699G NTFS)
   ├── downloads/         destino de descargas de qBittorrent
   └── backups/stack/     backups diarios
+/mnt/media3/             HDD 1TB (ext4) — destino del contenido nuevo
 ```
 
 ## Redes y acceso remoto
@@ -346,7 +347,7 @@ Los servicios se comunican por nombre de contenedor como DNS (ej: `http://radarr
 ```bash
 ./install.sh --update          # git pull + recrea contenedores (wizard)
 # o
-/home/chae/scripts/update-media-stack.sh   # script local de actualización
+/home/chae/stack/scripts/update-media-stack.sh   # script local de actualización
 
 ./scripts/health-check.sh      # estado integral del stack
 ./scripts/stop-stack.sh        # bajar todo

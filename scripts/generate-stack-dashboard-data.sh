@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-MEDIA_SERVER_IP="${MEDIA_SERVER_IP:-192.168.1.100}"
 set -Eeuo pipefail
+
+# Cargar entorno del stack (MEDIA_SERVER_IP entre otros); el cron no exporta .env.
+[[ -f /home/chae/stack/.env ]] && source /home/chae/stack/.env
+MEDIA_SERVER_IP="${MEDIA_SERVER_IP:-192.168.0.200}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/stack-dashboard"
@@ -87,6 +90,7 @@ service_json() {
 storage_json() {
   local label="$1"
   local path="$2"
+  local note="${3:-}"
   local lines line size used avail pcent target
 
   mapfile -t lines < <(df -B1 --output=size,used,avail,pcent,target "$path")
@@ -97,12 +101,13 @@ storage_json() {
   jq -nc \
     --arg label "$label" \
     --arg path "$path" \
+    --arg note "$note" \
     --arg mountPoint "$target" \
     --argjson sizeBytes "$size" \
     --argjson usedBytes "$used" \
     --argjson availableBytes "$avail" \
     --argjson usePercent "$pcent" \
-    '{label:$label,path:$path,mountPoint:$mountPoint,sizeBytes:$sizeBytes,usedBytes:$usedBytes,availableBytes:$availableBytes,usePercent:$usePercent}'
+    '{label:$label,path:$path,note:$note,mountPoint:$mountPoint,sizeBytes:$sizeBytes,usedBytes:$usedBytes,availableBytes:$availableBytes,usePercent:$usePercent}'
 }
 
 memory_bytes() {
@@ -111,6 +116,42 @@ memory_bytes() {
 
   value_kb="$(grep -m1 "^${key}:" /proc/meminfo | tr -s ' ' | cut -d' ' -f2)"
   printf '%s' "$(( value_kb * 1024 ))"
+}
+
+systemd_service_json() {
+  local name="$1"
+  local unit="$2"
+  local state
+  state="$(systemctl is-active "$unit" 2>/dev/null || true)"
+  [[ -z "$state" ]] && state='unknown'
+
+  jq -nc --arg name "$name" --arg unit "$unit" --arg state "$state" \
+    '{name:$name,unit:$unit,state:$state}'
+}
+
+queue_json() {
+  local app="$1"
+  local port="$2"
+  local cfg="$3"
+  local key payload
+
+  key="$(sed -n 's/.*<ApiKey>\(.*\)<\/ApiKey>.*/\1/p' "$cfg" 2>/dev/null || true)"
+  payload="$(curl -s --connect-timeout 2 --max-time 5 -H "X-Api-Key: $key" \
+    "http://127.0.0.1:${port}/api/v3/queue?pagesize=20" 2>/dev/null || true)"
+  [[ -z "$payload" ]] && payload='[]'
+
+  jq -c --arg app "$app" '
+    (if type == "object" then (.records // []) else . end) |
+    try (map({
+      app:$app,
+      title:.title,
+      status:.status,
+      percent:(if .size > 0 then (((.size - .sizeleft) / .size * 100) | round) else 0 end),
+      sizeMB:(if .size then (.size / 1048576 | floor) else 0 end),
+      downloadClient:.downloadClient,
+      trackedDownloadStatus:.trackedDownloadStatus,
+      error:(.errorMessage // "")
+    })) catch []' <<<"$payload" 2>/dev/null || echo '[]'
 }
 
 host_name="$(hostname)"
@@ -168,9 +209,12 @@ services_json="$({
 } | jq -s '.')"
 
 storage_json_all="$({
-  storage_json 'Biblioteca principal' '/mnt/media'
-  storage_json 'Descargas y cache' '/mnt/media2/downloads'
-  storage_json 'Volumen secundario' '/mnt/media2'
+  storage_json 'Pool de medios (mergerfs)' '/mnt/media' 'Unión de los 4 discos — es lo que ven Jellyfin, Radarr y Sonarr. El contenido nuevo cae en el disco con más espacio (mfs).'
+  storage_json 'Disco 1 · Backups (NTFS)' '/mnt/media1' 'Espejo de backups del stack. Quedó libre tras mudar la biblioteca vieja a media4 (sep 2026). Disco externo NTFS.'
+  storage_json 'Disco 2 · Descargas y backups (NTFS)' '/mnt/media2' 'Torrents de qBittorrent, caché de Tdarr y backups principales del stack. Disco externo NTFS.'
+  storage_json 'Ruta de descargas' '/mnt/media2/downloads' 'Torrents en curso y completados (qBittorrent) + caché de transcode de Tdarr.'
+  storage_json 'Disco 3 · Biblioteca activa (ext4)' '/mnt/media3' 'Series y películas en ext4 + archivo chae.'
+  storage_json 'Disco 4 · Biblioteca y contenido nuevo (ext4)' '/mnt/media4' 'Películas mudadas desde media1 (sep 2026) + destino de todo el contenido nuevo por política mfs.'
 } | jq -s '.')"
 
 running_containers="$(docker ps -q | wc -l | tr -d ' ')"
@@ -186,6 +230,24 @@ media_free_bytes="$(jq 'map(select(.path == "/mnt/media"))[0].availableBytes // 
 media_usage="$(jq -r 'map(select(.path == "/mnt/media"))[0].usePercent // 0 | tostring + "% usado"' <<<"$storage_json_all")"
 tdarr_server_status="$(jq -r '.[] | select(.container == "chae-tdarr") | .status' <<<"$services_json")"
 tdarr_node_status="$(jq -r '.[] | select(.container == "chae-tdarr-node") | .status' <<<"$services_json")"
+
+infra_json="$({
+  systemd_service_json 'Docker' 'docker'
+  systemd_service_json 'Apache' 'apache2'
+  systemd_service_json 'MariaDB' 'mariadb'
+  systemd_service_json 'Samba' 'smbd'
+  systemd_service_json 'SSH' 'ssh'
+  systemd_service_json 'Firewall (UFW)' 'ufw'
+  systemd_service_json 'fail2ban' 'fail2ban'
+  systemd_service_json 'Tailscale' 'tailscaled'
+  systemd_service_json 'Cloudflared' 'cloudflared'
+} | jq -s '.')"
+
+tailscale_ip="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+
+radarr_queue="$(queue_json 'Radarr' '7878' '/home/chae/stack/services/radarr/config/config.xml')"
+sonarr_queue="$(queue_json 'Sonarr' '8989' '/home/chae/stack/services/sonarr/config/config.xml')"
+queues_json="$(printf '%s\n%s' "$radarr_queue" "$sonarr_queue" | jq -s 'add // []')"
 
 jq -n \
   --arg generatedAt "$generated_at" \
@@ -214,6 +276,10 @@ jq -n \
   --argjson internalTotal "$internal_total" \
   --argjson mediaFreeBytes "$media_free_bytes" \
   --arg mediaUsage "$media_usage" \
+  --arg tdarrUrl "http://${MEDIA_SERVER_IP}:8265" \
+  --arg tailscaleIp "$tailscale_ip" \
+  --argjson infra "$infra_json" \
+  --argjson queues "$queues_json" \
   --arg dashboardCommand "$SCRIPT_DIR/generate-stack-dashboard-data.sh" \
   --arg updateCommand "$SCRIPT_DIR/update-media-stack.sh media" \
   --argjson services "$services_json" \
@@ -247,8 +313,11 @@ jq -n \
     },
     services:$services,
     storage:$storage,
+    infra:$infra,
+    queues:$queues,
+    tailscaleIp:$tailscaleIp,
     tdarr:{
-      url:"http://${MEDIA_SERVER_IP}:8265",
+      url:$tdarrUrl,
       ready:(($tdarrServerStatus == "running") and ($tdarrNodeStatus == "running")),
       serverStatus:$tdarrServerStatus,
       nodeStatus:$tdarrNodeStatus,

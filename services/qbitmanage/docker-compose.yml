@@ -1,0 +1,20 @@
+services:
+  qbitmanage:
+    image: docker.io/bobokun/qbit_manage:latest
+    container_name: chae-qbitmanage
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Etc/UTC}
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+    volumes:
+      - ./config:/config
+      - ${DOWNLOADS_ROOT:-/mnt/media2/downloads}:/downloads
+      - ${MEDIA_ROOT:-/mnt/media}:/media
+    command: ["python3", "qbit_manage.py", "--schedule", "720", "--debug"]
+    networks:
+      - qbittorrent_default
+
+networks:
+  qbittorrent_default:
+    external: true

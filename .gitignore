@@ -112,3 +112,7 @@ scripts/subtitle-downloader/
 **/*.log
 **/*.log.*
 services/maintainerr/data/
+
+# Runtime data root-owned (sep 2026)
+**/data-before-migration/
+services/scrutiny/influxdb/

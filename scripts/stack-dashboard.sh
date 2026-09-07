@@ -4,7 +4,7 @@ set -u
 
 JSON="${XDG_CACHE_HOME:-$HOME/.cache}/stack-dashboard/stack-data.json"
 MEDIA_SERVER_IP="${MEDIA_SERVER_IP:-192.168.1.100}"
-RECOVERY_DIR="${MEDIA_MOUNT_STATE_DIR:-/home/chae/.local/state/media-mount-recovery}"
+RECOVERY_DIR="${MEDIA_MOUNT_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/media-mount-recovery}"
 WD_LOG="/var/log/media-pool-watchdog.log"
 REC_LOG="$RECOVERY_DIR/recovery.log"
 

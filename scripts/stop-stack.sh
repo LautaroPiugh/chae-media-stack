@@ -8,7 +8,6 @@ if [ -f "$DIR/.env" ]; then set -a; . "$DIR/.env"; set +a; fi
 
 SERVICES=(
   jellyfin-whatsapp-bot
-  nginx-proxy-manager
   adguard
   tdarr
   homepage
@@ -23,6 +22,10 @@ SERVICES=(
   prowlarr
   subgen
   postgres
+  dozzle
+  scrutiny
+  qbitmanage
+  recyclarr
 )
 
 echo "═══ Deteniendo Media Stack ═══"

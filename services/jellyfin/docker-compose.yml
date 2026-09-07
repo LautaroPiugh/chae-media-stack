@@ -22,3 +22,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+networks:
+  default:
+    external: true
+    name: jellyfin_default

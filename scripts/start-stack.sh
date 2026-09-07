@@ -22,7 +22,10 @@ SERVICES=(
   homepage
   tdarr
   adguard
-  nginx-proxy-manager
+  recyclarr
+  qbitmanage
+  scrutiny
+  dozzle
 )
 
 echo "═══ Iniciando Media Stack ═══"

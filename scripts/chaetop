@@ -1,0 +1,714 @@
+#!/usr/bin/env python3
+import curses
+import json
+import os
+import re
+import shutil
+import socket
+import subprocess
+import threading
+import time
+import urllib.request
+
+HOME = os.path.expanduser("~")
+ENV_PATH = os.path.join(HOME, ".config", "chaetop", "chaetop.env")
+HOSTNAME = socket.gethostname()
+QBIT_URL = "http://127.0.0.1:8080"
+
+MEDIA1_PATH = "/mnt/media1"
+MEDIA2_PATH = "/mnt/media2"
+MEDIA_POOL = "/mnt/media"
+MEDIA1_UUID = "E41C8ED01C8E9CE4"
+MEDIA2_UUID = "3FD22A422077368D"
+
+PORTS = {
+    "chae-jellyfin": "8096",
+    "chae-jellyseerr": "5055",
+    "chae-radarr": "7878",
+    "chae-sonarr": "8989",
+    "chae-prowlarr": "9696",
+    "chae-qbittorrent": "8080",
+    "chae-bazarr": "6767",
+    "chae-adguard": "3002",
+    "chae-uptime-kuma": "3001",
+    "chae-homepage": "3003",
+    "chae-tdarr": "8265",
+    "subgenai": "9000",
+    "chae-maintainerr": "8787",
+    "portainer": "9443",
+    "jellyfin-whatsapp-bot": "3555",
+    "chae-flaresolverr": "8191",
+    "chae-postgres": "5432",
+}
+
+CORE = {
+    "chae-jellyfin", "chae-jellyseerr", "chae-radarr", "chae-sonarr",
+    "chae-prowlarr", "chae-qbittorrent", "chae-bazarr", "chae-tdarr",
+    "chae-tdarr-node",
+}
+
+LOCK = threading.Lock()
+SNAP = {
+    "services": [],
+    "stats": {},
+    "qbit": None,
+    "qbit_err": "",
+    "docker_err": "",
+}
+
+DOCKER = shutil.which("docker") or "/usr/bin/docker"
+if not os.path.exists(DOCKER):
+    for p in ("/usr/bin/docker", "/usr/local/bin/docker", "/snap/bin/docker"):
+        if os.path.exists(p):
+            DOCKER = p
+            break
+
+
+def load_env(path):
+    env = {}
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return env
+
+
+def local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except OSError:
+        return "127.0.0.1"
+
+
+def human_bytes(n):
+    for unit in ("", "K", "M", "G", "T"):
+        if abs(n) < 1024:
+            return f"{n:.0f}{unit}" if unit == "" or n >= 10 else f"{n:.1f}{unit}"
+        n /= 1024
+    return f"{n:.1f}P"
+
+
+def docker_collect():
+    while True:
+        try:
+            out = subprocess.run(
+                [DOCKER, "ps", "--format", "{{.Names}}|{{.Status}}|{{.State}}"],
+                capture_output=True, text=True, timeout=15,
+            ).stdout
+            svcs = []
+            for line in out.splitlines():
+                parts = line.split("|")
+                if len(parts) == 3:
+                    svcs.append({"name": parts[0], "status": parts[1], "state": parts[2]})
+            with LOCK:
+                SNAP["services"] = svcs
+                SNAP["docker_err"] = ""
+        except Exception as e:
+            with LOCK:
+                SNAP["docker_err"] = str(e)
+        try:
+            time.sleep(5)
+        except Exception:
+            time.sleep(5)
+
+
+def stats_collect():
+    fmt = "{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}"
+    while True:
+        try:
+            out = subprocess.run(
+                [DOCKER, "stats", "--no-stream", "--format", fmt],
+                capture_output=True, text=True, timeout=30,
+            ).stdout
+            st = {}
+            for line in out.splitlines():
+                parts = line.split("|")
+                if len(parts) == 4:
+                    st[parts[0]] = (
+                        parts[1].strip().rstrip("%"),
+                        parts[2].strip(),
+                        parts[3].strip().rstrip("%"),
+                    )
+            with LOCK:
+                SNAP["stats"] = st
+        except Exception:
+            pass
+        time.sleep(6)
+
+
+class Qbit:
+    def __init__(self):
+        env = load_env(ENV_PATH)
+        self.user = env.get("QBIT_USER", "")
+        self.pw = env.get("QBIT_PASS", "")
+        self.cookie = ""
+        self.logged = False
+
+    def _req(self, path, data=None):
+        req = urllib.request.Request(QBIT_URL + path)
+        req.add_header("Origin", QBIT_URL)
+        req.add_header("Referer", QBIT_URL + "/")
+        if self.cookie:
+            req.add_header("Cookie", self.cookie)
+        body = urllib.parse.urlencode(data).encode() if data else None
+        with urllib.request.urlopen(req, data=body, timeout=5) as r:
+            return r.read().decode(errors="replace"), r.headers.get("Set-Cookie", "")
+
+    def login(self):
+        if self.user:
+            out, hdr = self._req("/api/v2/auth/login", {"username": self.user, "password": self.pw})
+            m = re.search(r"([A-Za-z0-9_]*SID[A-Za-z0-9_]*)=([^;]+)", hdr)
+            if m:
+                self.cookie = f"{m.group(1)}={m.group(2)}"
+                return True
+            return False
+        try:
+            out, _ = self._req("/api/v2/app/version")
+            return "v" in out
+        except Exception:
+            return False
+
+
+def qbit_collect():
+    q = Qbit()
+    while True:
+        try:
+            if not q.logged:
+                q.logged = q.login()
+            if not q.logged:
+                with LOCK:
+                    SNAP["qbit"] = None
+                    if not q.user:
+                        SNAP["qbit_err"] = "sin credenciales (~/.config/chaetop/chaetop.env)"
+                    else:
+                        SNAP["qbit_err"] = "login fallido (revisar credenciales)"
+                time.sleep(10)
+                continue
+            tjson, _ = q._req("/api/v2/transfer/info")
+            tr = json.loads(tjson)
+            trjson, _ = q._req("/api/v2/torrents/info?limit=12&sort=dlspeed&reverse=true")
+            ts = json.loads(trjson)
+            active = [t for t in ts if t.get("dlspeed", 0) > 0 or t.get("upspeed", 0) > 0 or t.get("progress", 1) < 1]
+            active = active[:6]
+            with LOCK:
+                SNAP["qbit"] = {"transfer": tr, "torrents": active}
+                SNAP["qbit_err"] = ""
+        except Exception as e:
+            with LOCK:
+                SNAP["qbit"] = None
+                SNAP["qbit_err"] = f"error: {e}"
+            q.logged = False
+            q.cookie = ""
+            time.sleep(8)
+            continue
+        time.sleep(3)
+
+
+def read_cpu():
+    with open("/proc/stat") as f:
+        line = f.readline()
+    parts = [int(x) for x in line.split()[1:]]
+    idle = parts[3] + (parts[4] if len(parts) > 4 else 0)
+    total = sum(parts)
+    return idle, total
+
+
+def read_mem():
+    info = {}
+    with open("/proc/meminfo") as f:
+        for line in f:
+            k, v = line.split(":")
+            info[k] = int(v.split()[0])
+    total = info["MemTotal"]
+    avail = info["MemAvailable"]
+    swap_t = info.get("SwapTotal", 0)
+    swap_f = info.get("SwapFree", 0)
+    return total, total - avail, swap_t, swap_t - swap_f
+
+
+def read_net():
+    rx = tx = 0
+    with open("/proc/net/dev") as f:
+        for line in f.readlines()[2:]:
+            if ":" not in line:
+                continue
+            iface, data = line.split(":", 1)
+            if iface.strip() in ("lo",) or iface.strip().startswith(("docker", "veth", "br-")):
+                continue
+            f2 = data.split()
+            rx += int(f2[0])
+            tx += int(f2[8])
+    return rx, tx
+
+
+def read_temps():
+    temps = []
+    base = "/sys/class/thermal"
+    try:
+        for z in sorted(os.listdir(base)):
+            try:
+                with open(os.path.join(base, z, "temp")) as f:
+                    t = int(f.read().strip()) / 1000
+                if 0 < t < 120:
+                    temps.append(t)
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return temps
+
+
+def disk_info(path):
+    st = os.statvfs(path)
+    total = st.f_blocks * st.f_frsize
+    free = st.f_bavail * st.f_frsize
+    used = total - st.f_bfree * st.f_frsize
+    return total, used, free, (used / total * 100) if total else 0
+
+
+def mount_health(path, uuid):
+    if not os.path.isdir(path):
+        return "no existe", "red"
+    if not os.path.exists(f"/dev/disk/by-uuid/{uuid}"):
+        return "disco ausente", "red"
+    if subprocess.run(["mountpoint", "-q", path]).returncode != 0:
+        return "sin montar", "red"
+    cur = ""
+    try:
+        cur = subprocess.run(
+            ["findmnt", "-rn", "-o", "UUID", "--target", path],
+            capture_output=True, text=True,
+        ).stdout.strip()
+    except Exception:
+        pass
+    if cur != uuid:
+        return "disco equivocado", "red"
+    opts = ""
+    try:
+        opts = subprocess.run(
+            ["findmnt", "-rn", "-o", "OPTIONS", "--target", path],
+            capture_output=True, text=True,
+        ).stdout.strip()
+    except Exception:
+        pass
+    if opts and "rw" not in opts.split(","):
+        return "read-only!", "red"
+    return "ok", "green"
+
+
+def bar(w, pct, char="█", empty="░"):
+    n = max(0, min(int(w * pct / 100), w))
+    return char * n + empty * (w - n)
+
+
+class Chaetop:
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.sel = 0
+        self.last_cpu = read_cpu()
+        self.last_net = (time.time(), *read_net())
+        self.colors()
+
+    def colors(self):
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, curses.COLOR_RED, -1)
+        curses.init_pair(2, curses.COLOR_GREEN, -1)
+        curses.init_pair(3, curses.COLOR_YELLOW, -1)
+        curses.init_pair(4, curses.COLOR_CYAN, -1)
+        curses.init_pair(5, curses.COLOR_MAGENTA, -1)
+        curses.init_pair(6, curses.COLOR_WHITE, -1)
+        self.R = curses.color_pair(1)
+        self.G = curses.color_pair(2)
+        self.Y = curses.color_pair(3)
+        self.C = curses.color_pair(4)
+        self.M = curses.color_pair(5)
+        self.W = curses.color_pair(6)
+        self.D = curses.A_DIM
+
+    def safe(self, y, x, text, attr=0, w=200):
+        try:
+            self.stdscr.addnstr(max(0, y), max(0, x), str(text), w, attr)
+        except curses.error:
+            pass
+
+    def pct_color(self, p, hi=90, mid=70):
+        if p >= hi:
+            return self.R
+        if p >= mid:
+            return self.Y
+        return self.G
+
+    def gauge(self, y, x, w, label, pct, extra=""):
+        col = self.pct_color(pct)
+        self.safe(y, x, f"{label:<7}", self.C)
+        self.safe(y, x + 7, bar(w, pct), col)
+        self.safe(y, x + 7 + w, f" {pct:4.1f}% {extra}", self.D)
+
+    def draw(self):
+        stdscr = self.stdscr
+        stdscr.erase()
+        H, W = stdscr.getmaxyx()
+        now = time.time()
+
+        with open("/proc/uptime") as f:
+            up = int(float(f.read().split()[0]))
+        up_s = f"{up // 86400}d {up % 86400 // 3600}h {up % 3600 // 60}m"
+        load1, load5, load15 = os.getloadavg()
+
+        cpu_idle, cpu_total = self.last_cpu
+        idle, total = read_cpu()
+        d_total = total - cpu_total
+        d_idle = idle - cpu_idle
+        cpu_pct = (1 - d_idle / d_total) * 100 if d_total > 0 else 0
+        self.last_cpu = (idle, total)
+
+        mem_t, mem_u, swap_t, swap_u = read_mem()
+        mem_pct = mem_u / mem_t * 100 if mem_t else 0
+
+        t_now, rx, tx = self.last_net
+        rx2, tx2 = read_net()
+        dt = now - t_now
+        rx_s = (rx2 - rx) / dt if dt > 0 else 0
+        tx_s = (tx2 - tx) / dt if dt > 0 else 0
+        self.last_net = (now, rx2, tx2)
+
+        temps = read_temps()
+        t_txt = ""
+        if temps:
+            t_txt = f"  temp {max(temps):.0f}°C"
+
+        with LOCK:
+            services = list(SNAP["services"])
+            stats = dict(SNAP["stats"])
+            qbit = SNAP["qbit"]
+            qbit_err = SNAP["qbit_err"]
+            docker_err = SNAP["docker_err"]
+
+        self.safe(0, 0, "◆ chaetop", self.M | curses.A_BOLD)
+        self.safe(0, 11, f"{HOSTNAME} · {local_ip()}", self.W)
+        self.safe(0, 40, f"up {up_s}  load {load1:.2f} {load5:.2f} {load15:.2f}{t_txt}", self.D,
+                  max(0, W - 40 - 20))
+        self.safe(0, W - 19, now_fmt := time.strftime("%a %d/%m %H:%M:%S"), self.C)
+        self.safe(1, 0, "─" * (W - 1), self.D)
+
+        y = 2
+        gw = max(10, W - 60)
+        self.gauge(y, 0, gw, "CPU", cpu_pct, f"{os.cpu_count()} núcleos")
+        self.safe(y, W - 44, f"▼ {human_bytes(rx_s) + '/s':<12} ▲ {human_bytes(tx_s) + '/s':<12}", self.Y)
+        y += 1
+        self.gauge(y, 0, gw, "RAM", mem_pct, f"{human_bytes(mem_u * 1024)} / {human_bytes(mem_t * 1024)}")
+        y += 1
+        if swap_t:
+            self.gauge(y, 0, gw, "SWAP", swap_u / swap_t * 100 if swap_t else 0,
+                       f"{human_bytes(swap_u * 1024)} / {human_bytes(swap_t * 1024)}")
+            y += 1
+
+        y += 1
+        self.safe(y, 0, "DISCOS Y MOUNTS", self.M | curses.A_BOLD)
+        y += 1
+        for label, path in (("/     ", "/"), ("media ", MEDIA_POOL), ("media2", "/mnt/media2")):
+            try:
+                total, used, free, pct = disk_info(path)
+                bw = max(10, W - 58)
+                self.safe(y, 0, f"{label:<6}", self.C)
+                self.safe(y, 6, bar(bw, pct), self.pct_color(pct, 90, 80))
+                self.safe(y, 6 + bw, f" {pct:4.1f}%  {human_bytes(used)} / {human_bytes(total)}  libre {human_bytes(free)}", self.D)
+            except OSError:
+                self.safe(y, 0, f"{label:<6} (no accesible)", self.R)
+            y += 1
+        st1, c1 = mount_health(MEDIA1_PATH, MEDIA1_UUID)
+        st2, c2 = mount_health(MEDIA2_PATH, MEDIA2_UUID)
+        cmap = {"green": self.G, "red": self.R}
+        col1 = cmap.get(c1, self.D)
+        col2 = cmap.get(c2, self.D)
+        self.safe(y, 0, "pool:", self.D)
+        self.safe(y, 7, "media1", self.C)
+        self.safe(y, 14, f"[{st1:^15}]", col1)
+        self.safe(y, 33, "media2", self.C)
+        self.safe(y, 40, f"[{st2:^15}]", col2)
+        y += 2
+
+        if qbit and (W >= 90 and H >= 22):
+            self.safe(y, 0, "TORRENTS (qBittorrent)", self.M | curses.A_BOLD)
+            tr = qbit["transfer"]
+            dl = tr.get("dl_info_speed", 0)
+            ul = tr.get("up_info_speed", 0)
+            self.safe(y, 26, f"▼ {human_bytes(dl)+'/s':<11} ▲ {human_bytes(ul)+'/s':<11}", self.Y)
+            y += 1
+            if not qbit["torrents"]:
+                self.safe(y, 2, "sin actividad", self.D)
+                y += 1
+            for t in qbit["torrents"]:
+                if y >= H - 3:
+                    break
+                name = (t.get("name", "?"))[:min(46, W - 60)]
+                self.safe(y, 2, name, self.W)
+                self.safe(y, 50, bar(18, t.get("progress", 0) * 100), self.C)
+                self.safe(y, 70, f"{t.get('progress', 0) * 100:5.1f}%  ▼{human_bytes(t.get('dlspeed', 0))+'/s':<10} ETA {fmt_eta(t.get('eta', -1))}", self.D)
+                y += 1
+            y += 1
+        elif qbit_err and (W >= 90 and H >= 22):
+            self.safe(y, 0, "TORRENTS (qBittorrent)", self.M | curses.A_BOLD)
+            self.safe(y, 26, qbit_err, self.R)
+            y += 2
+
+        if docker_err:
+            self.safe(y, 0, f"docker error: {docker_err}", self.R)
+            y += 2
+
+        rows = max(3, H - y - 2)
+        self.safe(y, 0, "SERVICIOS DOCKER", self.M | curses.A_BOLD)
+        self.safe(y, 24, f"{'ESTADO':<9} {'SALUD':<10} {'CPU':>6} {'MEM':>9} {'PUERTO':>6}  URL", self.D)
+        y += 1
+
+        services.sort(key=lambda s: (s["name"] not in CORE, s["name"]))
+        services = services[:max(0, rows - 1)]
+        if not services:
+            self.safe(y, 2, "cargando…", self.D)
+        for i, s in enumerate(services):
+            if y + i >= H - 1:
+                break
+            st = stats.get(s["name"], ("-", "-", "-"))
+            sel = i == self.sel
+            attr_sel = curses.A_REVERSE if sel else 0
+            up = "running" in s["state"] or s["state"] == "running"
+            healthy = "healthy" in s["status"]
+            st_mark = self.G if up else self.R
+            h_mark = self.G if "healthy" in s["status"] else (self.Y if "health" in s["status"] else self.D)
+            core_m = self.M if s["name"] in CORE else self.D
+            self.safe(y + i, 0, f"{'▶' if sel else ' '}{s['name'][:23]:<23}", attr_sel | core_m)
+            self.safe(y + i, 24, f"{'● running' if up else '✗ caído  ':<9}", attr_sel | st_mark)
+            self.safe(y + i, 34, f"{health_txt(s['status']):<10}", attr_sel | h_mark)
+            self.safe(y + i, 45, f"{st[0]:>5}%", attr_sel)
+            mem_u = st[1].split("/")[0].strip()
+            self.safe(y + i, 52, f"{mem_u:>8} {st[2]:>4}%", attr_sel)
+            port = PORTS.get(s["name"], "")
+            if port:
+                self.safe(y + i, 68, f"{port:>6}", attr_sel | self.C)
+                if W >= 90:
+                    self.safe(y + i, 76, f"http://127.0.0.1:{port}", attr_sel | self.D)
+            else:
+                self.safe(y + i, 68, "   ---", attr_sel | self.D)
+
+        self.safe(H - 2, 0, "─" * (W - 1), self.D)
+        self.safe(H - 1, 0,
+                  " q salir · j/k servicio · l logs · r reiniciar · s shell · u update stack · m mounts · d docker · ? ayuda ",
+                  self.D)
+
+        self.sel = max(0, min(self.sel, len(services) - 1))
+        stdscr.refresh()
+
+
+def fmt_eta(s):
+    if s in (8640000, -1):
+        return "∞"
+    s = int(s)
+    if s >= 86400:
+        return f"{s // 86400}d{s % 86400 // 3600}h"
+    if s >= 3600:
+        return f"{s // 3600}h{s % 3600 // 60}m"
+    if s >= 60:
+        return f"{s // 60}m{s % 60}s"
+    return f"{s}s"
+
+
+def health_txt(status):
+    if "healthy" in status:
+        return "healthy"
+    if "unhealthy" in status:
+        return "UNHEALTHY"
+    if "health: starting" in status:
+        return "starting"
+    return "-"
+
+
+def run_ext(stdscr, cmd, hint=""):
+    curses.def_prog_mode()
+    curses.endwin()
+    code = 1
+    try:
+        code = subprocess.run(cmd).returncode
+    except KeyboardInterrupt:
+        pass
+    except FileNotFoundError as e:
+        print(f"chaetop: {e}")
+    if hint:
+        print(hint)
+    print(f"\n[{code}] — Enter para volver a chaetop…")
+    try:
+        input()
+    except KeyboardInterrupt:
+        pass
+    curses.reset_prog_mode()
+    try:
+        curses.curs_set(0)
+    except curses.error:
+        pass
+    curses.noecho()
+    curses.cbreak()
+    stdscr.keypad(True)
+    stdscr.nodelay(True)
+    stdscr.erase()
+    stdscr.refresh()
+
+
+def confirm(stdscr, text):
+    H, W = stdscr.getmaxyx()
+    win = curses.newwin(3, max(40, len(text) + 6), H // 2 - 1, max(0, W // 2 - len(text) // 2 - 3))
+    win.box()
+    win.addstr(1, 2, text, curses.color_pair(3) | curses.A_BOLD)
+    win.refresh()
+    stdscr.nodelay(False)
+    k = win.getch()
+    stdscr.nodelay(True)
+    return k in (ord("y"), ord("Y"), curses.KEY_ENTER, 10)
+
+
+def help_overlay(stdscr):
+    H, W = stdscr.getmaxyx()
+    lines = [
+        "chaetop — dashboard del servidor chae",
+        "",
+        "  q / Esc      salir de chaetop",
+        "  j / k / ↑↓   elegir servicio",
+        "  l            logs en vivo del servicio (Ctrl+C para volver)",
+        "  r            reiniciar el servicio (pide confirmación)",
+        "  s            shell dentro del contenedor",
+        "  u            update del stack media (update-media-stack.sh)",
+        "  m            estado de mounts (scripts/media-status.sh)",
+        "  d            docker ps detallado",
+        "",
+        "  qBittorrent: si no aparecen torrents, crea",
+        "  ~/.config/chaetop/chaetop.env con QBIT_USER y QBIT_PASS",
+        "",
+        "  (cualquier tecla para cerrar)",
+    ]
+    w = min(W - 2, 66)
+    win = curses.newwin(len(lines) + 2, w, max(0, H // 2 - len(lines) // 2), max(0, (W - w) // 2))
+    win.box()
+    for i, ln in enumerate(lines):
+        win.addnstr(i + 1, 2, ln, w - 4, curses.A_BOLD if i == 0 else curses.A_NORMAL)
+    win.refresh()
+    stdscr.nodelay(False)
+    win.getch()
+    stdscr.nodelay(True)
+
+
+def main(stdscr):
+    threading.Thread(target=docker_collect, daemon=True).start()
+    threading.Thread(target=stats_collect, daemon=True).start()
+    threading.Thread(target=qbit_collect, daemon=True).start()
+
+    curses.curs_set(0)
+    stdscr.nodelay(True)
+    stdscr.keypad(True)
+    app = Chaetop(stdscr)
+    start = time.time()
+
+    def read_keys():
+        keys = []
+        stdscr.nodelay(False)
+        stdscr.timeout(400)
+        k = stdscr.getch()
+        if k != -1:
+            keys.append(k)
+            stdscr.nodelay(True)
+            while True:
+                k = stdscr.getch()
+                if k == -1 or len(keys) >= 32:
+                    break
+                keys.append(k)
+        stdscr.nodelay(True)
+        return keys
+
+    while True:
+        with LOCK:
+            no_services = not SNAP["services"] and not SNAP["docker_err"]
+        if no_services and time.time() - start > 4:
+            try:
+                out = subprocess.run(
+                    [DOCKER, "ps", "--format", "{{.Names}}|{{.Status}}|{{.State}}"],
+                    capture_output=True, text=True, timeout=15,
+                ).stdout
+                svcs = []
+                for line in out.splitlines():
+                    parts = line.split("|")
+                    if len(parts) == 3:
+                        svcs.append({"name": parts[0], "status": parts[1], "state": parts[2]})
+                with LOCK:
+                    SNAP["services"] = svcs
+            except Exception as e:
+                with LOCK:
+                    SNAP["docker_err"] = str(e)
+            start = time.time()
+        try:
+            app.draw()
+        except curses.error:
+            pass
+        for k in read_keys():
+            if k in (ord("q"), ord("Q"), 27):
+                return
+            elif k in (ord("j"), curses.KEY_DOWN):
+                app.sel += 1
+            elif k in (ord("k"), curses.KEY_UP):
+                app.sel = max(0, app.sel - 1)
+            elif k in (ord("h"), ord("?")):
+                help_overlay(stdscr)
+            elif k in (ord("l"), ord("L")):
+                with LOCK:
+                    services = list(SNAP["services"])
+                services.sort(key=lambda s: (s["name"] not in CORE, s["name"]))
+                if services and app.sel < len(services):
+                    ctr = services[app.sel]["name"]
+                    run_ext(stdscr, [DOCKER, "logs", "-f", "--tail", "80", ctr],
+                            hint="(Ctrl+C corta los logs)")
+            elif k in (ord("r"), ord("R")):
+                with LOCK:
+                    services = list(SNAP["services"])
+                services.sort(key=lambda s: (s["name"] not in CORE, s["name"]))
+                if services and app.sel < len(services):
+                    ctr = services[app.sel]["name"]
+                    if confirm(stdscr, f"¿Reiniciar {ctr}? (y/n)"):
+                        run_ext(stdscr, [DOCKER, "restart", ctr])
+            elif k in (ord("s"), ord("S")):
+                with LOCK:
+                    services = list(SNAP["services"])
+                services.sort(key=lambda s: (s["name"] not in CORE, s["name"]))
+                if services and app.sel < len(services):
+                    ctr = services[app.sel]["name"]
+                    shell = "bash"
+                    if subprocess.run([DOCKER, "exec", ctr, "which", "bash"],
+                                      capture_output=True).returncode != 0:
+                        shell = "sh"
+                    run_ext(stdscr, [DOCKER, "exec", "-it", ctr, shell])
+            elif k in (ord("u"), ord("U")):
+                if confirm(stdscr, "¿Lanzar update del stack? (y/n)"):
+                    run_ext(stdscr, [os.path.join(HOME, "scripts", "update-media-stack.sh")])
+            elif k in (ord("m"), ord("M")):
+                run_ext(stdscr, [os.path.join(HOME, "scripts", "media-status.sh")])
+            elif k in (ord("d"), ord("D")):
+                run_ext(stdscr, [DOCKER, "ps", "-a", "--format",
+                                 "table {{.Names}}\t{{.Status}}\t{{.Image}}"])
+            elif k == curses.KEY_RESIZE:
+                stdscr.erase()
+
+
+if __name__ == "__main__":
+    if not os.environ.get("TERM") or os.environ.get("TERM") == "dumb":
+        os.environ["TERM"] = "linux"
+    os.environ["ESCDELAY"] = "25"
+    try:
+        curses.wrapper(main)
+    except KeyboardInterrupt:
+        print("chaetop cerrado (Ctrl+C).")

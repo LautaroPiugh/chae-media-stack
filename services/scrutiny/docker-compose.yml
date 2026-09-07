@@ -1,0 +1,24 @@
+services:
+  scrutiny:
+    image: ghcr.io/analogj/scrutiny:latest-omnibus
+    container_name: chae-scrutiny
+    restart: unless-stopped
+    privileged: true
+    environment:
+      - TZ=${TZ:-Etc/UTC}
+    volumes:
+      - ./config:/opt/scrutiny/config
+      - ./influxdb:/opt/scrutiny/influxdb
+      - /run/udev:/run/udev:ro
+    ports:
+      - "${MEDIA_SERVER_IP:-192.168.0.200}:8082:8080"
+      - "127.0.0.1:8082:8080"
+    networks:
+      - qbittorrent_default
+    cap_add:
+      - SYS_RAWIO
+      - SYS_ADMIN
+
+networks:
+  qbittorrent_default:
+    external: true

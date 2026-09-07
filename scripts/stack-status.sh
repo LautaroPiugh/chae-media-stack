@@ -4,7 +4,7 @@
 set -euo pipefail
 
 JSON="${XDG_CACHE_HOME:-$HOME/.cache}/stack-dashboard/stack-data.json"
-RECOVERY_STATE="${MEDIA_MOUNT_STATE_DIR:-/home/chae/.local/state/media-mount-recovery}/last_state"
+RECOVERY_STATE="${MEDIA_MOUNT_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/media-mount-recovery}/last_state"
 
 GREEN='#[fg=colour114]'
 YELLOW='#[fg=colour179]'
