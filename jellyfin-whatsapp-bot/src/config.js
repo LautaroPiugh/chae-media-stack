@@ -7,6 +7,7 @@ const config = {
   whatsapp: {
     owner: process.env.WHATSAPP_OWNER || '',
     updateNotifyToken: process.env.WHATSAPP_UPDATE_NOTIFY_TOKEN || '',
+    pairPhone: (process.env.WHATSAPP_PAIR_PHONE || '').replace(/\D/g, ''),
   },
 
   admin: {

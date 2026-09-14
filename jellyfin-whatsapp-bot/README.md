@@ -118,7 +118,7 @@ Enviá estos comandos por WhatsApp:
 | `/traducir [película]` | Traduce subtítulos EN→ES vía DeepL |
 | `/buscar [nombre]` | Búsqueda combinada en Radarr + Sonarr |
 | `/peli [nombre]` o `/pelicula [nombre]` | Buscar y agregar película a Radarr |
-| `/serie [nombre]` o `/series [nombre]` | Buscar y agregar serie a Sonarr |
+| `/serie [nombre] [1080p|4k]` o `/series [nombre]` | Buscar y agregar serie a Sonarr |
 | `/azar [peli/serie]` o `/random` | Recomendación aleatoria de la biblioteca |
 | `/recomendar [género]` | Recomendación por género |
 | `/cola` o `/descargas` | Cola de descargas activas (Radarr + Sonarr + qBittorrent) |
@@ -143,16 +143,37 @@ Enviá estos comandos por WhatsApp:
 
 ### Agregar contenido con calidad preferida
 
+El sufijo de calidad funciona igual en películas y en series. Si no se
+especifica, se usa el perfil por defecto configurado en `.env`
+(`RADARR_QUALITY_PROFILE_ID` / `SONARR_QUALITY_PROFILE_ID`).
+
 ```bash
 /peli inception 4k       # Buscar y preferir calidad 4K
 /peli inception 1080p    # Buscar y preferir calidad 1080p
+/serie breaking bad 4k   # Buscar y preferir calidad 4K
+/serie breaking bad 1080p # Buscar y preferir calidad 1080p
+/serie breaking bad      # Perfil por defecto
+```
+
+### Elegir temporada (series)
+
+Después de elegir la serie, el bot muestra las temporadas ordenadas de 1 a N
+con "todas" como última opción. Todas estas respuestas equivalen:
+
+```bash
+serie 2          # opción 2 de la lista = temporada 2
+serie temporada 2
+temporada 2
+2
+serie todas      # todas las temporadas (última de la lista)
+serie <N+1>      # el número final de la lista también es "todas"
 ```
 
 ### Ejemplos
 
 ```
 /peli matrix
-/serie breaking bad
+/serie breaking bad 1080p
 /cola
 peli 1
 serie 2

@@ -17,18 +17,25 @@ function formatSeasonSelection(item, seasons) {
   return formatPanel(`Temporadas de ${item.title} (${item.year || 's/a'})`, [
     {
       lines: [
-        '- Elegí si querés bajar todas las temporadas o solo una',
+        '- Elegí qué temporadas querés descargar',
         '',
         'Opciones',
-        '- todas',
-        ...seasons.map((seasonNumber) => `- temporada ${seasonNumber}`),
+        ...seasons.map((seasonNumber, index) => `- ${index + 1}. temporada ${seasonNumber}`),
+        `- ${seasons.length + 1}. todas`,
+        '',
+        'Acciones',
+        '- Respondé "serie <número>" o solo el número',
+        '- También vale "serie temporada <n>" o "serie todas"',
+        '- Usá "/cancelar" para cerrar este flujo',
       ],
     },
   ]);
 }
 
 function getSeriesMonitorOptions(choice, seasons) {
-  if (choice === 'todas') {
+  const normalized = choice.trim();
+
+  if (normalized === 'todas') {
     return {
       addOptions: {
         monitor: 1,
@@ -37,24 +44,45 @@ function getSeriesMonitorOptions(choice, seasons) {
     };
   }
 
-  const match = choice.match(/^(?:temporada\s*)?(\d+)$/i);
+  const match = normalized.match(/^(?:temporada\s*)?(\d+)$/i);
   if (!match) {
     return null;
   }
 
-  const seasonNumber = parseInt(match[1], 10);
-  if (!seasons.includes(seasonNumber)) {
-    return null;
+  const number = parseInt(match[1], 10);
+
+  if (seasons.includes(number)) {
+    return {
+      addOptions: {
+        monitor: 1,
+        searchForMissingEpisodes: false,
+        searchForCutoffUnmetEpisodes: false,
+      },
+      selectedSeason: number,
+    };
   }
 
-  return {
-    addOptions: {
-      monitor: 1,
-      searchForMissingEpisodes: false,
-      searchForCutoffUnmetEpisodes: false,
-    },
-    selectedSeason: seasonNumber,
-  };
+  if (number >= 1 && number <= seasons.length) {
+    return {
+      addOptions: {
+        monitor: 1,
+        searchForMissingEpisodes: false,
+        searchForCutoffUnmetEpisodes: false,
+      },
+      selectedSeason: seasons[number - 1],
+    };
+  }
+
+  if (number === seasons.length + 1) {
+    return {
+      addOptions: {
+        monitor: 1,
+        searchForMissingEpisodes: true,
+      },
+    };
+  }
+
+  return null;
 }
 
 async function triggerSeriesSubtitleAutomation(seriesId) {
@@ -65,7 +93,9 @@ async function triggerSeriesSubtitleAutomation(seriesId) {
   }
 }
 
-async function addSelectedSeries(item, userJid, options = {}) {
+async function addSelectedSeries(item, userJid, options = {}, preferredQuality = null) {
+  const qualityLine = preferredQuality ? [`- Preferencia aplicada: ${preferredQuality}`] : [];
+
   if (item.raw?.id) {
     if (options.selectedSeason) {
       await setSeriesSeasonMonitoring(item.raw.id, options.selectedSeason);
@@ -98,6 +128,7 @@ async function addSelectedSeries(item, userJid, options = {}) {
     return formatInfoPanel('Serie agregada', [
       `- ✅ ${item.title} (${item.year}) fue agregada a Sonarr`,
       `- Temporada monitoreada: ${options.selectedSeason}`,
+      ...qualityLine,
       '- También lancé la búsqueda de subtítulos en español en Bazarr',
       '- Te aviso cuando haya episodios disponibles',
     ]);
@@ -105,6 +136,7 @@ async function addSelectedSeries(item, userJid, options = {}) {
 
   return formatInfoPanel('Serie agregada', [
     `- ✅ ${item.title} (${item.year}) fue agregada a Sonarr y enviada a buscar`,
+    ...qualityLine,
     '- También lancé la búsqueda de subtítulos en español en Bazarr',
     '- Te aviso cuando haya episodios disponibles',
   ]);
@@ -123,8 +155,13 @@ async function handleSelection(text, userJid, type) {
       return formatSeasonSelection(item, seasons);
     }
 
+    const seriesOptions = {
+      ...monitorOptions,
+      ...(pending.preferredQualityProfileId ? { qualityProfileId: pending.preferredQualityProfileId } : {}),
+    };
+
     deletePending(userJid);
-    return addSelectedSeries(item, userJid, monitorOptions);
+    return addSelectedSeries(item, userJid, seriesOptions, pending.preferredQuality);
   }
 
   const input = text.replace(/^(peli|serie)\s*/i, '').trim();
@@ -190,12 +227,19 @@ async function handleSelection(text, userJid, type) {
           mode: 'season_select',
           item,
           seasons,
+          preferredQuality: pending.preferredQuality,
+          preferredQualityProfileId: pending.preferredQualityProfileId,
         });
 
         return formatSeasonSelection(item, seasons);
       }
 
-      return addSelectedSeries(item, userJid);
+      return addSelectedSeries(
+        item,
+        userJid,
+        pending.preferredQualityProfileId ? { qualityProfileId: pending.preferredQualityProfileId } : {},
+        pending.preferredQuality,
+      );
     }
   } catch (error) {
     if (error.message.includes('already exists')) {

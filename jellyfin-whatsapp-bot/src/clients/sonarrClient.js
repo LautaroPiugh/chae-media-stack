@@ -318,9 +318,26 @@ async function deleteSeries(seriesId) {
   }
 }
 
+async function listQualityProfiles() {
+  if (!config.sonarr.url || !config.sonarr.apiKey) {
+    return [];
+  }
+
+  const res = await fetchWithTimeout(`${config.sonarr.url}/api/v3/qualityprofile`, {
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    return [];
+  }
+
+  return await res.json();
+}
+
 module.exports = {
   searchSeries,
   addSeries,
+  listQualityProfiles,
   getSeriesById,
   setSeriesSeasonMonitoring,
   searchExistingSeries,

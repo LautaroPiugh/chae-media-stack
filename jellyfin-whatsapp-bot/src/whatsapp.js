@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers, fetchLatestWaWebVersion } = require('@whiskeysockets/baileys');
 const { unlink } = require('fs/promises');
 const { join } = require('path');
 const qrcode = require('qrcode');
@@ -14,6 +14,7 @@ let connected = false;
 let messageHandler = null;
 let startPromise = null;
 let manualReconnect = false;
+let pairingRequested = false;
 
 const logger = pino({ level: 'info' });
 
@@ -73,13 +74,13 @@ async function startWhatsApp() {
 
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
-  const { version } = await fetchLatestBaileysVersion({});
+  const { version } = await fetchLatestWaWebVersion(logger).catch(() => fetchLatestBaileysVersion({}));
 
   sock = makeWASocket({
     auth: state,
     version,
+    browser: Browsers.macOS('Chrome'),
     logger,
-    shouldSyncHistoryMessage: () => false,
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -87,10 +88,22 @@ async function startWhatsApp() {
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
       publishQr(qr);
+      const pairPhone = config.whatsapp.pairPhone;
+      if (pairPhone) {
+        try {
+          const code = await sock.requestPairingCode(pairPhone);
+          const formatted = code.match(/.{1,4}/g)?.join('-') || code;
+          console.log(`\n🔑 WhatsApp pairing code for +${pairPhone}: ${formatted}\n`);
+          console.log('Enter it on your phone: WhatsApp > Settings > Linked devices > Link with phone number instead\n');
+        } catch (error) {
+          console.error(`[WhatsApp] Pairing code request failed: ${error.message}`);
+        }
+      }
     }
     if (connection === 'open') {
       connected = true;
       manualReconnect = false;
+      pairingRequested = false;
       unlink(qrPath).catch(() => {});
       console.log('✅ WhatsApp connected');
     } else if (connection === 'close') {
