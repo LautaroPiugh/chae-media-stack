@@ -8,6 +8,7 @@ import socket
 import subprocess
 import threading
 import time
+import urllib.parse
 import urllib.request
 
 HOME = os.path.expanduser("~")
@@ -20,6 +21,9 @@ MEDIA2_PATH = "/mnt/media2"
 MEDIA_POOL = "/mnt/media"
 MEDIA1_UUID = "E41C8ED01C8E9CE4"
 MEDIA2_UUID = "3FD22A422077368D"
+
+STACK_SCRIPTS = os.path.join(HOME, "stack", "scripts")
+UPDATE_SCRIPT = os.path.join(STACK_SCRIPTS, "update-media-stack.sh")
 
 PORTS = {
     "chae-jellyfin": "8096",
@@ -47,6 +51,34 @@ CORE = {
     "chae-tdarr-node",
 }
 
+SERVICE_OF = {
+    "chae-prowlarr": "prowlarr",
+    "chae-sonarr": "sonarr",
+    "chae-radarr": "radarr",
+    "chae-bazarr": "bazarr",
+    "chae-jellyfin": "jellyfin",
+    "chae-flaresolverr": "flaresolverr",
+    "subgenai": "subgen",
+    "chae-jellyseerr": "jellyseerr",
+    "chae-tdarr": "tdarr",
+    "chae-tdarr-node": "tdarr",
+    "chae-homepage": "homepage",
+    "chae-dozzle": "dozzle",
+    "chae-scrutiny": "scrutiny",
+    "chae-qbitmanage": "qbitmanage",
+    "chae-recyclarr": "recyclarr",
+}
+
+REAL_FS = (
+    "ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs",
+    "ntfs", "ntfs3", "ntfs-3g", "exfat", "vfat", "fuseblk",
+    "mergerfs", "fuse.mergerfs", "fuse.rclone", "fuse.overlay",
+    "nfs", "nfs4", "cifs", "smb2", "sshfs",
+)
+
+SKIP_MOUNTS = ("/proc", "/sys", "/dev", "/run", "/snap", "/var/lib/docker",
+               "/var/lib/kubelet", "/boot/efi", "/tmp")
+
 LOCK = threading.Lock()
 SNAP = {
     "services": [],
@@ -54,14 +86,12 @@ SNAP = {
     "qbit": None,
     "qbit_err": "",
     "docker_err": "",
+    "disks": [],
+    "media": {},
+    "media_err": "",
 }
 
-DOCKER = shutil.which("docker") or "/usr/bin/docker"
-if not os.path.exists(DOCKER):
-    for p in ("/usr/bin/docker", "/usr/local/bin/docker", "/snap/bin/docker"):
-        if os.path.exists(p):
-            DOCKER = p
-            break
+ENV = None
 
 
 def load_env(path):
@@ -98,6 +128,31 @@ def human_bytes(n):
     return f"{n:.1f}P"
 
 
+def api_get(url, headers=None, timeout=6):
+    req = urllib.request.Request(url)
+    for k, v in (headers or {}).items():
+        req.add_header(k, v)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode(errors="replace"))
+
+
+DOCKER = shutil.which("docker") or "/usr/bin/docker"
+if not os.path.exists(DOCKER):
+    for p in ("/usr/bin/docker", "/usr/local/bin/docker", "/snap/bin/docker"):
+        if os.path.exists(p):
+            DOCKER = p
+            break
+
+
+def parse_docker_ps(out):
+    svcs = []
+    for line in out.splitlines():
+        parts = line.split("|")
+        if len(parts) == 3:
+            svcs.append({"name": parts[0], "status": parts[1], "state": parts[2]})
+    return svcs
+
+
 def docker_collect():
     while True:
         try:
@@ -105,13 +160,8 @@ def docker_collect():
                 [DOCKER, "ps", "--format", "{{.Names}}|{{.Status}}|{{.State}}"],
                 capture_output=True, text=True, timeout=15,
             ).stdout
-            svcs = []
-            for line in out.splitlines():
-                parts = line.split("|")
-                if len(parts) == 3:
-                    svcs.append({"name": parts[0], "status": parts[1], "state": parts[2]})
             with LOCK:
-                SNAP["services"] = svcs
+                SNAP["services"] = parse_docker_ps(out)
                 SNAP["docker_err"] = ""
         except Exception as e:
             with LOCK:
@@ -148,9 +198,9 @@ def stats_collect():
 
 class Qbit:
     def __init__(self):
-        env = load_env(ENV_PATH)
-        self.user = env.get("QBIT_USER", "")
-        self.pw = env.get("QBIT_PASS", "")
+        global ENV
+        self.user = ENV.get("QBIT_USER", "")
+        self.pw = ENV.get("QBIT_PASS", "")
         self.cookie = ""
         self.logged = False
 
@@ -214,6 +264,159 @@ def qbit_collect():
         time.sleep(3)
 
 
+def mount_health(path, uuid):
+    if not os.path.isdir(path):
+        return "no existe"
+    if not os.path.exists(f"/dev/disk/by-uuid/{uuid}"):
+        return "disco ausente"
+    if subprocess.run(["mountpoint", "-q", path]).returncode != 0:
+        return "sin montar"
+    cur = ""
+    try:
+        cur = subprocess.run(
+            ["findmnt", "-rn", "-o", "UUID", "--target", path],
+            capture_output=True, text=True,
+        ).stdout.strip()
+    except Exception:
+        pass
+    if cur != uuid:
+        return "disco equivocado"
+    opts = ""
+    try:
+        opts = subprocess.run(
+            ["findmnt", "-rn", "-o", "OPTIONS", "--target", path],
+            capture_output=True, text=True,
+        ).stdout.strip()
+    except Exception:
+        pass
+    if opts and "rw" not in opts.split(","):
+        return "read-only!"
+    return "ok"
+
+
+def disk_collect():
+    while True:
+        disks = []
+        seen = {}
+        try:
+            with open("/proc/mounts") as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) < 3:
+                        continue
+                    dev, mp, fstype = parts[0], parts[1], parts[2]
+                    if fstype not in REAL_FS:
+                        continue
+                    if mp == "/" or any(mp.startswith(p + "/") or mp == p for p in SKIP_MOUNTS):
+                        if mp != "/":
+                            continue
+                    seen[mp] = {"dev": dev, "fstype": fstype}
+        except OSError:
+            pass
+
+        for mp in sorted(seen, key=lambda p: (p != "/", p)):
+            info = seen[mp]
+            try:
+                st = os.statvfs(mp)
+                total = st.f_blocks * st.f_frsize
+                free = st.f_bavail * st.f_frsize
+                used = total - st.f_bfree * st.f_frsize
+                pct = (used / total * 100) if total else 0
+            except OSError:
+                continue
+            if total < 4 * 1024 ** 3:
+                continue
+            if info["dev"].startswith("/dev/"):
+                dev = os.path.basename(info["dev"])[:12]
+            elif "mergerfs" in info["fstype"]:
+                dev = "pool"
+            else:
+                dev = info["fstype"]
+            disk = {
+                "path": mp,
+                "dev": dev,
+                "fstype": info["fstype"],
+                "total": total,
+                "used": used,
+                "free": free,
+                "pct": pct,
+                "health": "",
+            }
+            if mp == MEDIA1_PATH:
+                disk["health"] = mount_health(mp, MEDIA1_UUID)
+            elif mp == MEDIA2_PATH:
+                disk["health"] = mount_health(mp, MEDIA2_UUID)
+            disks.append(disk)
+
+        with LOCK:
+            SNAP["disks"] = disks
+        time.sleep(10)
+
+
+def media_collect():
+    global ENV
+    while True:
+        media = {}
+        try:
+            jf_key = ENV.get("JELLYFIN_KEY", "")
+            if jf_key:
+                hdr = {"Authorization": f'MediaBrowser Token="{jf_key}"'}
+                try:
+                    counts = api_get("http://127.0.0.1:8096/Items/Counts", hdr)
+                    media["jf_lib"] = f"{counts.get('MovieCount', 0)} pelis · {counts.get('SeriesCount', 0)} series · {counts.get('EpisodeCount', 0)} eps"
+                except Exception:
+                    pass
+                try:
+                    sessions = api_get("http://127.0.0.1:8096/Sessions", hdr)
+                    playing = [s for s in sessions if s.get("NowPlayingItem")]
+                    media["jf_sessions"] = [
+                        f"{s.get('UserName', '?')} · {(s.get('NowPlayingItem') or {}).get('Name', '?')}"
+                        for s in playing[:3]
+                    ]
+                except Exception:
+                    pass
+
+            rk = ENV.get("RADARR_KEY", "")
+            if rk:
+                hdr = {"X-Api-Key": rk}
+                try:
+                    movies = api_get("http://127.0.0.1:7878/api/v3/movie", hdr)
+                    total = len(movies)
+                    have = sum(1 for m in movies if m.get("hasFile"))
+                    q = api_get("http://127.0.0.1:7878/api/v3/queue?pageSize=1", hdr)
+                    media["radarr"] = (total, total - have, q.get("totalRecords", 0))
+                except Exception:
+                    pass
+
+            sk = ENV.get("SONARR_KEY", "")
+            if sk:
+                hdr = {"X-Api-Key": sk}
+                try:
+                    series = api_get("http://127.0.0.1:8989/api/v3/series", hdr)
+                    q = api_get("http://127.0.0.1:8989/api/v3/queue?pageSize=1", hdr)
+                    miss = api_get("http://127.0.0.1:8989/api/v3/wanted/missing?pageSize=1&includeMonitored=true", hdr)
+                    media["sonarr"] = (len(series), miss.get("totalRecords", 0), q.get("totalRecords", 0))
+                except Exception:
+                    pass
+
+            sk2 = ENV.get("SEERR_KEY", "")
+            if sk2:
+                hdr = {"X-Api-Key": sk2}
+                try:
+                    req = api_get("http://127.0.0.1:5055/api/v1/request?take=1&skip=0&filter=processing", hdr)
+                    media["seerr"] = req.get("pageInfo", {}).get("results", 0)
+                except Exception:
+                    pass
+
+            with LOCK:
+                SNAP["media"] = media
+                SNAP["media_err"] = ""
+        except Exception as e:
+            with LOCK:
+                SNAP["media_err"] = f"error: {e}"
+        time.sleep(20)
+
+
 def read_cpu():
     with open("/proc/stat") as f:
         line = f.readline()
@@ -268,44 +471,6 @@ def read_temps():
     return temps
 
 
-def disk_info(path):
-    st = os.statvfs(path)
-    total = st.f_blocks * st.f_frsize
-    free = st.f_bavail * st.f_frsize
-    used = total - st.f_bfree * st.f_frsize
-    return total, used, free, (used / total * 100) if total else 0
-
-
-def mount_health(path, uuid):
-    if not os.path.isdir(path):
-        return "no existe", "red"
-    if not os.path.exists(f"/dev/disk/by-uuid/{uuid}"):
-        return "disco ausente", "red"
-    if subprocess.run(["mountpoint", "-q", path]).returncode != 0:
-        return "sin montar", "red"
-    cur = ""
-    try:
-        cur = subprocess.run(
-            ["findmnt", "-rn", "-o", "UUID", "--target", path],
-            capture_output=True, text=True,
-        ).stdout.strip()
-    except Exception:
-        pass
-    if cur != uuid:
-        return "disco equivocado", "red"
-    opts = ""
-    try:
-        opts = subprocess.run(
-            ["findmnt", "-rn", "-o", "OPTIONS", "--target", path],
-            capture_output=True, text=True,
-        ).stdout.strip()
-    except Exception:
-        pass
-    if opts and "rw" not in opts.split(","):
-        return "read-only!", "red"
-    return "ok", "green"
-
-
 def bar(w, pct, char="█", empty="░"):
     n = max(0, min(int(w * pct / 100), w))
     return char * n + empty * (w - n)
@@ -355,6 +520,73 @@ class Chaetop:
         self.safe(y, x + 7, bar(w, pct), col)
         self.safe(y, x + 7 + w, f" {pct:4.1f}% {extra}", self.D)
 
+    def draw_disks(self, y, H, W):
+        self.safe(y, 0, "DISCOS Y MOUNTS", self.M | curses.A_BOLD)
+        self.safe(y, 26, "auto · se agregan solos al montar", self.D)
+        y += 1
+        with LOCK:
+            disks = list(SNAP["disks"])
+        if not disks:
+            self.safe(y, 2, "cargando…", self.D)
+            return y + 2
+        cmap = {"ok": self.G, "": self.D}
+        bw = max(16, min(70, W - 74))
+        meta_x = 13 + bw + 40
+        for d in disks:
+            if y >= H - 4:
+                break
+            label = d["path"] if d["path"] == "/" else os.path.basename(d["path"].rstrip("/")) or d["path"]
+            self.safe(y, 0, f"{label[:12]:<12}", self.C)
+            self.safe(y, 13, bar(bw, d["pct"]), self.pct_color(d["pct"], 90, 80))
+            self.safe(y, 13 + bw, f" {d['pct']:4.1f}%  {human_bytes(d['used'])}/{human_bytes(d['total'])}  libre {human_bytes(d['free'])}", self.D)
+            meta = f"{d['dev']} · {d['fstype']}"
+            self.safe(y, min(meta_x, W - 38), meta, self.D, 24)
+            if d["health"]:
+                col = self.G if d["health"] == "ok" else self.R
+                self.safe(y, W - 14, f"[{d['health']}]", col)
+            y += 1
+        return y + 1
+
+    def draw_media(self, y, H, W):
+        self.safe(y, 0, "MEDIA STACK", self.M | curses.A_BOLD)
+        y += 1
+        with LOCK:
+            media = dict(SNAP["media"])
+            merr = SNAP["media_err"]
+        if not media and not merr:
+            self.safe(y, 2, "cargando…", self.D)
+            return y + 2
+        if merr and not media:
+            self.safe(y, 2, f"{merr}", self.R)
+            return y + 2
+
+        x2 = W // 2
+        line = f"Radarr   {media.get('radarr', ('-',))[0]} pelis · faltan {media.get('radarr', (0, 0))[1]} · cola {media.get('radarr', (0, 0, 0))[2]}"
+        self.safe(y, 0, "🎬 Jellyfin", self.Y)
+        self.safe(y, 12, media.get("jf_lib", "-"), self.D)
+        self.safe(y, x2, "🍿 Radarr", self.Y)
+        self.safe(y, x2 + 12, line[9:], self.D)
+        y += 1
+        sessions = media.get("jf_sessions", [])
+        if sessions:
+            for s in sessions[:1]:
+                self.safe(y, 12, f"▶ {s}", self.G)
+        else:
+            self.safe(y, 12, "sin reproducción activa", self.D)
+        line = f"Sonarr   {media.get('sonarr', ('-',))[0]} series · {media.get('sonarr', (0, 0))[1]} eps faltan · cola {media.get('sonarr', (0, 0, 0))[2]}"
+        self.safe(y, x2, "📺 Sonarr", self.Y)
+        self.safe(y, x2 + 12, line[9:], self.D)
+        y += 1
+        if len(sessions) > 1:
+            for s in sessions[1:3]:
+                self.safe(y, 12, f"▶ {s}", self.G)
+                y += 1
+        seerr = media.get("seerr")
+        if seerr is not None:
+            self.safe(y, x2, "🎟 Seerr", self.Y)
+            self.safe(y, x2 + 12, f"{seerr} pedidos en proceso", self.D)
+        return y + 1
+
     def draw(self):
         stdscr = self.stdscr
         stdscr.erase()
@@ -399,7 +631,7 @@ class Chaetop:
         self.safe(0, 11, f"{HOSTNAME} · {local_ip()}", self.W)
         self.safe(0, 40, f"up {up_s}  load {load1:.2f} {load5:.2f} {load15:.2f}{t_txt}", self.D,
                   max(0, W - 40 - 20))
-        self.safe(0, W - 19, now_fmt := time.strftime("%a %d/%m %H:%M:%S"), self.C)
+        self.safe(0, W - 19, time.strftime("%a %d/%m %H:%M:%S"), self.C)
         self.safe(1, 0, "─" * (W - 1), self.D)
 
         y = 2
@@ -415,29 +647,10 @@ class Chaetop:
             y += 1
 
         y += 1
-        self.safe(y, 0, "DISCOS Y MOUNTS", self.M | curses.A_BOLD)
-        y += 1
-        for label, path in (("/     ", "/"), ("media ", MEDIA_POOL), ("media2", "/mnt/media2")):
-            try:
-                total, used, free, pct = disk_info(path)
-                bw = max(10, W - 58)
-                self.safe(y, 0, f"{label:<6}", self.C)
-                self.safe(y, 6, bar(bw, pct), self.pct_color(pct, 90, 80))
-                self.safe(y, 6 + bw, f" {pct:4.1f}%  {human_bytes(used)} / {human_bytes(total)}  libre {human_bytes(free)}", self.D)
-            except OSError:
-                self.safe(y, 0, f"{label:<6} (no accesible)", self.R)
-            y += 1
-        st1, c1 = mount_health(MEDIA1_PATH, MEDIA1_UUID)
-        st2, c2 = mount_health(MEDIA2_PATH, MEDIA2_UUID)
-        cmap = {"green": self.G, "red": self.R}
-        col1 = cmap.get(c1, self.D)
-        col2 = cmap.get(c2, self.D)
-        self.safe(y, 0, "pool:", self.D)
-        self.safe(y, 7, "media1", self.C)
-        self.safe(y, 14, f"[{st1:^15}]", col1)
-        self.safe(y, 33, "media2", self.C)
-        self.safe(y, 40, f"[{st2:^15}]", col2)
-        y += 2
+        y = self.draw_disks(y, H, W)
+
+        if W >= 90 and H >= 22:
+            y = self.draw_media(y, H, W)
 
         if qbit and (W >= 90 and H >= 22):
             self.safe(y, 0, "TORRENTS (qBittorrent)", self.M | curses.A_BOLD)
@@ -503,7 +716,7 @@ class Chaetop:
 
         self.safe(H - 2, 0, "─" * (W - 1), self.D)
         self.safe(H - 1, 0,
-                  " q salir · j/k servicio · l logs · r reiniciar · s shell · u update stack · m mounts · d docker · ? ayuda ",
+                  " q salir · j/k servicio · l logs · r reiniciar · s shell · u preview updates · U actualizar servicio · m mounts · d docker · ? ayuda ",
                   self.D)
 
         self.sel = max(0, min(self.sel, len(services) - 1))
@@ -575,6 +788,17 @@ def confirm(stdscr, text):
     return k in (ord("y"), ord("Y"), curses.KEY_ENTER, 10)
 
 
+def msg(stdscr, text):
+    H, W = stdscr.getmaxyx()
+    win = curses.newwin(3, max(40, len(text) + 6), H // 2 - 1, max(0, W // 2 - len(text) // 2 - 3))
+    win.box()
+    win.addstr(1, 2, text, curses.color_pair(4))
+    win.refresh()
+    stdscr.nodelay(False)
+    win.getch()
+    stdscr.nodelay(True)
+
+
 def help_overlay(stdscr):
     H, W = stdscr.getmaxyx()
     lines = [
@@ -585,9 +809,13 @@ def help_overlay(stdscr):
         "  l            logs en vivo del servicio (Ctrl+C para volver)",
         "  r            reiniciar el servicio (pide confirmación)",
         "  s            shell dentro del contenedor",
-        "  u            update del stack media (update-media-stack.sh)",
+        "  u            preview de updates del stack (allowlist)",
+        "  U            actualizar de verdad el servicio elegido",
         "  m            estado de mounts (scripts/media-status.sh)",
         "  d            docker ps detallado",
+        "",
+        "  Discos: se listan todos los montajes reales,",
+        "  los que se agreguen aparecen solos.",
         "",
         "  qBittorrent: si no aparecen torrents, crea",
         "  ~/.config/chaetop/chaetop.env con QBIT_USER y QBIT_PASS",
@@ -606,9 +834,13 @@ def help_overlay(stdscr):
 
 
 def main(stdscr):
+    global ENV
+    ENV = load_env(ENV_PATH)
     threading.Thread(target=docker_collect, daemon=True).start()
     threading.Thread(target=stats_collect, daemon=True).start()
     threading.Thread(target=qbit_collect, daemon=True).start()
+    threading.Thread(target=disk_collect, daemon=True).start()
+    threading.Thread(target=media_collect, daemon=True).start()
 
     curses.curs_set(0)
     stdscr.nodelay(True)
@@ -641,13 +873,8 @@ def main(stdscr):
                     [DOCKER, "ps", "--format", "{{.Names}}|{{.Status}}|{{.State}}"],
                     capture_output=True, text=True, timeout=15,
                 ).stdout
-                svcs = []
-                for line in out.splitlines():
-                    parts = line.split("|")
-                    if len(parts) == 3:
-                        svcs.append({"name": parts[0], "status": parts[1], "state": parts[2]})
                 with LOCK:
-                    SNAP["services"] = svcs
+                    SNAP["services"] = parse_docker_ps(out)
             except Exception as e:
                 with LOCK:
                     SNAP["docker_err"] = str(e)
@@ -693,16 +920,28 @@ def main(stdscr):
                         shell = "sh"
                     run_ext(stdscr, [DOCKER, "exec", "-it", ctr, shell])
             elif k in (ord("u"), ord("U")):
-                if confirm(stdscr, "¿Lanzar update del stack? (y/n)"):
-                    run_ext(stdscr, [os.path.join(HOME, "scripts", "update-media-stack.sh")])
+                if k == ord("u"):
+                    if confirm(stdscr, "¿Ver preview de updates del stack? (y/n)"):
+                        run_ext(stdscr, [UPDATE_SCRIPT, "media"])
+                else:
+                    with LOCK:
+                        services = list(SNAP["services"])
+                    services.sort(key=lambda s: (s["name"] not in CORE, s["name"]))
+                    if services and app.sel < len(services):
+                        ctr = services[app.sel]["name"]
+                        key = SERVICE_OF.get(ctr)
+                        if not key:
+                            msg(stdscr, f"{ctr} no es actualizable (sin compose o denylist)")
+                        elif confirm(stdscr, f"¿Actualizar {ctr} de verdad? (y/n)"):
+                            run_ext(stdscr, ["env", "DRY_RUN=0", f"CONFIRM_UPDATE={key}",
+                                             UPDATE_SCRIPT, "service", key])
             elif k in (ord("m"), ord("M")):
-                run_ext(stdscr, [os.path.join(HOME, "scripts", "media-status.sh")])
+                run_ext(stdscr, [os.path.join(STACK_SCRIPTS, "media-status.sh")])
             elif k in (ord("d"), ord("D")):
                 run_ext(stdscr, [DOCKER, "ps", "-a", "--format",
                                  "table {{.Names}}\t{{.Status}}\t{{.Image}}"])
             elif k == curses.KEY_RESIZE:
                 stdscr.erase()
-
 
 if __name__ == "__main__":
     if not os.environ.get("TERM") or os.environ.get("TERM") == "dumb":

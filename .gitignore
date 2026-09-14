@@ -108,6 +108,34 @@ scripts/subtitle-downloader/
 .idea/
 .vscode/
 
+# AI tooling (nunca trackear, en ninguna carpeta del repo)
+.opencode/
+.opencode*/
+.claude/
+.cursor/
+.cursorrule
+.codeium/
+.continue/
+.windsurf/
+.gemini/
+.aider*
+.copilot/
+.github-copilot/
+**/.opencode/
+**/.opencode*/
+**/.claude/
+**/.cursor/
+**/.cursorrule
+**/.codeium/
+**/.continue/
+**/.windsurf/
+**/.gemini/
+**/.aider*
+**/.copilot/
+**/.github-copilot/
+**/ai-cache/
+**/.ai/
+
 # Runtime data & logs
 **/*.log
 **/*.log.*

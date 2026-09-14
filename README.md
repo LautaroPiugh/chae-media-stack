@@ -364,6 +364,7 @@ También disponible desde WhatsApp: `/actualizarsistema`.
 | `scripts/start-stack.sh` / `stop-stack.sh` | Levantar/bajar el stack completo |
 | `scripts/health-check.sh` | Chequeo de salud de todos los servicios |
 | `scripts/stack-status.sh` / `media-status.sh` | Estado rápido del stack |
+| `scripts/chaetop` | Dashboard TUI del servidor (discos, media stack, torrents, Docker) |
 | `scripts/stack-logs.sh` | Logs centralizados |
 | `scripts/backup-stack.sh` | Backup diario (Postgres + configs) |
 | `scripts/check_es_subs.py` | Pipeline principal de subtítulos ES |
@@ -371,6 +372,30 @@ También disponible desde WhatsApp: `/actualizarsistema`.
 | `scripts/sync-homepage-keys.sh` | Sincroniza API keys con Homepage |
 | `scripts/update-media-stack.sh` | Actualización del stack |
 | `bin/panel-remoto` | Panel de control remoto |
+
+### chaetop — dashboard TUI
+
+Dashboard interactivo en terminal (`chaetop` está en `~/bin`, `~/.local/bin` y
+`stack/bin` vía symlink a `scripts/chaetop`). Paneles:
+
+- **Discos y mounts**: lista automática de todos los discos reales de
+  `/proc/mounts` (los que se agreguen aparecen solos), con barra, uso, libre,
+  device y filesystem; los HDD del pool (`/mnt/media1`, `/mnt/media2`) además
+  muestran `[ok]`/error verificando el UUID esperado.
+- **Media stack**: biblioteca Jellyfin (pelis/series/eps), sesiones activas con
+  usuario y título, Radarr (faltantes + cola), Sonarr (eps faltantes + cola) y
+  pedidos en proceso de Jellyseerr.
+- **Torrents**: descargas activas de qBittorrent con progreso y ETA.
+- **Servicios Docker**: estado, salud, CPU, memoria, puerto y URL por contenedor.
+
+Atajos: `q` salir · `j/k` elegir servicio · `l` logs · `r` reiniciar ·
+`s` shell · `u` preview de updates · `U` actualizar el servicio elegido (con
+confirmación, vía `update-media-stack.sh service`) · `m` mounts · `d` docker ·
+`?` ayuda.
+
+Credenciales y API keys en `~/.config/chaetop/chaetop.env`
+(`QBIT_USER`, `QBIT_PASS`, `JELLYFIN_KEY`, `RADARR_KEY`, `SONARR_KEY`,
+`SEERR_KEY`).
 
 ## Troubleshooting
 
