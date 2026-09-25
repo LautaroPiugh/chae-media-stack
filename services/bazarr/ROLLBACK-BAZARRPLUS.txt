@@ -1,0 +1,37 @@
+Rollback Bazarr -> Bazarr+ (20260924-015444)
+
+Imagen ANTES (pinneada por digest, la de siempre):
+  lscr.io/linuxserver/bazarr@sha256:b3d44d324399152be4d50775ff639a364c0fa1cfda67f71b1f38264c4d0ca09f
+
+Config ANTES del cambio:
+  /home/chae/stack/services/bazarr/config-backup-pre-bazarrplus-20260924-015444
+
+Para volver:
+  1. cd /home/chae/stack/services/bazarr
+  2. en docker-compose.yml poner de nuevo:
+       image: lscr.io/linuxserver/bazarr@sha256:b3d44d324399152be4d50775ff639a364c0fa1cfda67f71b1f38264c4d0ca09f
+  3. rm -rf config && cp -a config-backup-pre-bazarrplus-20260924-015444 config
+  4. docker compose -f /home/chae/stack/services/bazarr/docker-compose.yml up -d
+
+OJO: Bazarr+ es una imagen de TERCEROS (ghcr.io/lavx/bazarr), no de linuxserver.
+Tiene acceso a /mnt/media completo y a todas las API keys del config (Radarr, Sonarr,
+OpenSubtitles, DeepL, Gemini). Si no confiás en esa imagen, no migrar.
+
+═══════════════════════════════════════════════════════════════════
+⚠  IMPORTANTE — la migración de la base de datos es ONE-WAY
+═══════════════════════════════════════════════════════════════════
+Al arrancar, Bazarr+ hizo migraciones de esquema que NO se pueden
+deshacer (el propio log lo avisa: "this is a ONE-WAY schema change
+(downgrade() raises)"):
+
+  - adoptó la DB de upstream Bazarr (revision 0124f9e278fb)
+  - restauró las columnas .subtitles que upstream había dropeado
+  - reinsertó 1145 filas de episodios + 665 de películas
+  - cutover de PK a local-id (one-way)
+
+O sea: volver a lscr.io/linuxserver/bazarr NO funciona con el config/actual.
+Para el rollback hay que restaurar SÍ o SÍ el backup de config:
+
+  rm -rf config && cp -a config-backup-pre-bazarrplus-20260924-015444 config
+
+(sin ese restore, el Bazarr viejo no levanta con el esquema nuevo).

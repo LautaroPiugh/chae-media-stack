@@ -1,6 +1,10 @@
 services:
   bazarr:
-    image: lscr.io/linuxserver/bazarr@sha256:b3d44d324399152be4d50775ff639a364c0fa1cfda67f71b1f38264c4d0ca09f
+    # Bazarr+ (LavX/bazarr) — fork de Bazarr con Provider Hub Marketplace
+    # (da acceso a OpenSubtitles.org sin API key ni VIP vía FlareSolverr).
+    # Pinneada por digest como el resto del stack. Rollback:
+    #   services/bazarr/ROLLBACK-BAZARRPLUS.txt
+    image: ghcr.io/lavx/bazarr@sha256:9ce6db2e5453f78ebc9aae53520f6e5813e80cd96595a58279c7cef6c9111bd2
     container_name: chae-bazarr
     restart: unless-stopped
     environment:
