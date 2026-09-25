@@ -144,3 +144,6 @@ services/maintainerr/data/
 # Runtime data root-owned (sep 2026)
 **/data-before-migration/
 services/scrutiny/influxdb/
+
+# ML model weights (subgen/whisper) — 1.5G, descargables, no son source
+services/subgen/models/
