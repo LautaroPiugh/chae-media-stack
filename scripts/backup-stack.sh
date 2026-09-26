@@ -338,11 +338,20 @@ tar_archive() {
   local archive="$1"
   shift
   local rc=0
+  # --ignore-failed-read evita que UN archivo ilegible (AdGuardHome.yaml es
+  # root:root 600) tumbe el backup entero. Pero con ese flag tar no dice NADA:
+  # exit 0 y silencio. Por eso warn_unreadable va antes y deja el hueco escrito
+  # en el log — un backup que pierde archivos no puede parecer exitoso.
+  #
+  # El exclude de models es específico al subgen: el tar se hace con
+  # -C <dirname> <basename>, así que la raíz del archivo es "subgen" y el
+  # patrón tiene que empezar por subgen/. Con */models/* excluía cualquier
+  # carpeta llamada models en cualquier servicio respaldado.
     tar czf "$archive" \
       --exclude='*/config/*.db-wal' \
       --exclude='*/config/*.db-shm' \
       --exclude='*/influxdb/*' \
-      --exclude='*/models/*' \
+      --exclude='subgen/models/*' \
       --ignore-failed-read \
       --warning=no-file-changed \
       "$@" || rc=$?
@@ -353,14 +362,33 @@ tar_archive() {
   fi
 }
 
+# Lista lo que el usuario actual no puede leer dentro de un dir de config.
+# Con --ignore-failed-read esos archivos se saltan en silencio; esto los hace
+# visibles. No es decorativo: sin esto, perder credenciales no deja rastro.
+warn_unreadable() {
+  local name="$1" src="$2" f found=0
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    if [[ "$found" -eq 0 ]]; then
+      log "WARN: $name — archivos NO respaldados por permisos:"
+      found=1
+    fi
+    log "        - ${f#"$PROJECT_DIR"/} (legible solo por root; requiere chown o backup con sudo)"
+  done < <(find "$src" -type f \! -readable 2>/dev/null)
+  if [[ "$found" -eq 1 ]]; then
+    log "WARN: $name — el backup terminó bien pero esos archivos NO están en el tar"
+  fi
+}
+
 for pair in "${CONFIG_DIRS[@]}"; do
   name="${pair%%:*}"
   src="${pair##*:}"
-  if [ -d "$src" ]; then
-    log "Backupeando configuracion: $name"
-    archive="$BACKUP_DIR/configs/${name}-$DATE.tar.gz"
-    log "Destino: $archive"
-    if [[ "$name" == 'jellyfin' ]]; then
+    if [ -d "$src" ]; then
+      log "Backupeando configuracion: $name"
+      archive="$BACKUP_DIR/configs/${name}-$DATE.tar.gz"
+      log "Destino: $archive"
+      warn_unreadable "$name" "$src"
+      if [[ "$name" == 'jellyfin' ]]; then
       tar_archive "$archive" \
         --exclude='jellyfin/config/data/data/jellyfin.db' \
         --exclude='jellyfin/config/data/data/jellyfin.db-shm' \
