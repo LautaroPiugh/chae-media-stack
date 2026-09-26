@@ -12,7 +12,11 @@ TMP_FILE="$CACHE_DIR/stack-data.json.tmp"
 STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/media-stack-update.state"
 
 mkdir -p "$CACHE_DIR"
-chmod 755 "$CACHE_DIR"
+# 2775 y no 755: el setgid (la "s") hace que el archivo herede el grupo
+# www-data, que es como Apache lo lee. Con 755 Apache se queda sin acceso y
+# /api/stack-data.php responde 500. El grupo se fija una vez con
+# chgrp www-data; aca solo se preserva el bit.
+chmod 2775 "$CACHE_DIR"
 
 read_state_value() {
   local key="$1"
@@ -371,7 +375,10 @@ jq -n \
   }' > "$TMP_FILE"
 
   mv "$TMP_FILE" "$OUTPUT_FILE"
-  # 600 y no 644: el JSON incluye colas de Radarr/Sonarr con nombres de
-  # PELICULAS/SERIES. Verificado: no persiste API keys, pero el contenido
-  # igual es privado. El directorio ya es 755, así que solo el archivo.
-  chmod 600 "$OUTPUT_FILE"
+  # 640 y no 600: el JSON incluye colas de Radarr/Sonarr con nombres de
+  # PELICULAS/SERIES, asi que el contenido es privado y no va a 644.
+  # Lo lee Apache como www-data via /api/stack-data.php, asi que necesita
+  # lectura por grupo. El directorio es setgid (chae:www-data 2775), por eso
+  # el archivo hereda ese grupo y no hace falta chgrp — que ademas fallaria
+  # sin root, porque chae no es miembro de www-data.
+  chmod 640 "$OUTPUT_FILE"
