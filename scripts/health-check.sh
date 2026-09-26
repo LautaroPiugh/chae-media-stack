@@ -154,7 +154,29 @@ for service in "${SERVICES[@]}"; do
 done
 
 header "Almacenamiento"
-for mount in /mnt/media /mnt/media2; do
+# Ramas y pool leídos de .media-branches.conf (N discos, nada hardcodeado)
+BRANCH_CFG="${MEDIA_BRANCHES_CONFIG:-/home/chae/stack/.media-branches.conf}"
+POOL_PATH="$(awk -F= '$1=="MEDIA_POOL"{print substr($0,index($0,"=")+1); exit}' "$BRANCH_CFG" 2>/dev/null)"
+BRANCHES_RAW="$(awk -F= '$1=="MEDIA_BRANCHES"{print substr($0,index($0,"=")+1); exit}' "$BRANCH_CFG" 2>/dev/null)"
+POOL_PATH="${POOL_PATH:-/mnt/media}"
+mounts=("$POOL_PATH")
+if [ -n "$BRANCHES_RAW" ]; then
+  IFS=':' read -ra _branches <<< "$BRANCHES_RAW"
+  for _b in "${_branches[@]}"; do
+    [ -n "$_b" ] && mounts+=("$_b")
+  done
+else
+  mounts+=(/mnt/media1 /mnt/media2 /mnt/media3 /mnt/media4 /mnt/media5 /mnt/media6)
+fi
+# capacidad total del pool, para que se vea de una
+if mountpoint -q "$POOL_PATH" 2>/dev/null; then
+  read -r _ _size _used _avail _pct < <(df -B1 "$POOL_PATH" | awk 'NR==2{print $1,$2,$3,$4,$5}')
+  printf "  ${CYAN}·${NC} %-20s total %s · usados %s · libres %s\n" "capacidad pool" \
+    "$(numfmt --to=iec --suffix=B "$_size" 2>/dev/null || echo "$_size")" \
+    "$(numfmt --to=iec --suffix=B "$_used" 2>/dev/null || echo "$_used")" \
+    "$(numfmt --to=iec --suffix=B "$_avail" 2>/dev/null || echo "$_avail")"
+fi
+for mount in "${mounts[@]}"; do
   total=$((total + 1))
   if mountpoint -q "$mount" 2>/dev/null; then
     usage="$(df -h "$mount" | awk 'NR==2 {print $5}')"

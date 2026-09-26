@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-CLEANUP_SCRIPT = Path.home() / "scripts" / "cleanup-stack.sh"
+CLEANUP_SCRIPT = Path.home() / "stack" / "scripts" / "cleanup-stack.sh"
 STATE_DIR = Path.home() / ".local/state/cleanup-stack"
 LAST_RUN_FILE = STATE_DIR / "last-run.json"
 LOCK_FILE = STATE_DIR / "cleanup.lock"

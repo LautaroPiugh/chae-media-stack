@@ -1,15 +1,37 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-MEDIA1_PATH="${MEDIA1_PATH:-/mnt/media1}"
-MEDIA2_PATH="${MEDIA2_PATH:-/mnt/media2}"
-MEDIA3_PATH="${MEDIA3_PATH:-/mnt/media3}"
-MEDIA4_PATH="${MEDIA4_PATH:-/mnt/media4}"
 MEDIA_POOL_PATH="${MEDIA_POOL_PATH:-/mnt/media}"
-MEDIA1_UUID="${MEDIA1_UUID:-E41C8ED01C8E9CE4}"
-MEDIA2_UUID="${MEDIA2_UUID:-3FD22A422077368D}"
-MEDIA3_UUID="${MEDIA3_UUID:-f5b48469-5ece-4e75-a90d-7ff6a93c4dfe}"
-MEDIA4_UUID="${MEDIA4_UUID:-a4325f7b-fd22-4a64-8f1e-fd90483740c5}"
+CONFIG_FILE="${MEDIA_BRANCHES_CONFIG:-/home/chae/stack/.media-branches.conf}"
+BRANCH_PATHS=()
+BRANCH_UUIDS=()
+EXPECTED_BRANCHES=''
+
+config_get() {
+  local key="$1"
+  [[ -f "$CONFIG_FILE" ]] || return 1
+  awk -F= -v k="$key" '$1==k {print substr($0, index($0,"=")+1); exit}' "$CONFIG_FILE"
+}
+
+load_media_config() {
+  local branches_raw uuids_raw
+  [[ -f "$CONFIG_FILE" ]] || return 1
+  branches_raw="$(config_get MEDIA_BRANCHES || true)"
+  uuids_raw="$(config_get MEDIA_UUIDS || true)"
+  [[ -n "$branches_raw" && -n "$uuids_raw" ]] || return 1
+  IFS=':' read -ra BRANCH_PATHS <<< "$branches_raw"
+  IFS=':' read -ra BRANCH_UUIDS <<< "$uuids_raw"
+  [[ "${#BRANCH_PATHS[@]}" -gt 0 && "${#BRANCH_PATHS[@]}" -eq "${#BRANCH_UUIDS[@]}" ]] || return 1
+  EXPECTED_BRANCHES="$branches_raw"
+  return 0
+}
+
+is_rw_mount() {
+  local path="$1"
+  local options
+  options="$(findmnt -rn -o OPTIONS --target "$path" 2>/dev/null || true)"
+  [[ ",$options," == *,rw,* ]]
+}
 
 branch_is_healthy() {
   local path="$1"
@@ -21,13 +43,6 @@ branch_is_healthy() {
   current_uuid="$(findmnt -rn -o UUID --target "$path" 2>/dev/null || true)"
   [[ "$current_uuid" == "$expected_uuid" ]] || return 1
   is_rw_mount "$path"
-}
-
-is_rw_mount() {
-  local path="$1"
-  local options
-  options="$(findmnt -rn -o OPTIONS --target "$path" 2>/dev/null || true)"
-  [[ ",$options," == *,rw,* ]]
 }
 
 pool_has_expected_branches() {
@@ -47,7 +62,7 @@ pool_has_expected_branches() {
     branches_found=0
     mountpoint_found=0
     for argument in "${arguments[@]:1}"; do
-      [[ "$argument" == "$MEDIA1_PATH:$MEDIA2_PATH:$MEDIA3_PATH:$MEDIA4_PATH" ]] && branches_found=1
+      [[ "$argument" == "$EXPECTED_BRANCHES" ]] && branches_found=1
       [[ "$argument" == "$MEDIA_POOL_PATH" ]] && mountpoint_found=1
     done
     if [[ "$branches_found" -eq 1 && "$mountpoint_found" -eq 1 ]]; then
@@ -57,10 +72,17 @@ pool_has_expected_branches() {
   return 1
 }
 
-if branch_is_healthy "$MEDIA1_PATH" "$MEDIA1_UUID" \
-  && branch_is_healthy "$MEDIA2_PATH" "$MEDIA2_UUID" \
-  && branch_is_healthy "$MEDIA3_PATH" "$MEDIA3_UUID" \
-  && branch_is_healthy "$MEDIA4_PATH" "$MEDIA4_UUID" \
+load_media_config || { printf 'missing\n'; exit 1; }
+
+all_branches_ok=1
+for i in "${!BRANCH_PATHS[@]}"; do
+  if ! branch_is_healthy "${BRANCH_PATHS[$i]}" "${BRANCH_UUIDS[$i]}"; then
+    all_branches_ok=0
+    break
+  fi
+done
+
+if [[ "$all_branches_ok" -eq 1 ]] \
   && mountpoint -q "$MEDIA_POOL_PATH" \
   && [[ "$(findmnt -rn -o FSTYPE --target "$MEDIA_POOL_PATH" 2>/dev/null || true)" == 'fuse.mergerfs' ]] \
   && pool_has_expected_branches \

@@ -212,12 +212,29 @@ services_json="$({
 } | jq -s '.')"
 
 storage_json_all="$({
-  storage_json 'Pool de medios (mergerfs)' '/mnt/media' 'Unión de los 4 discos — es lo que ven Jellyfin, Radarr y Sonarr. El contenido nuevo cae en el disco con más espacio (mfs).'
-  storage_json 'Disco 1 · Backups (NTFS)' '/mnt/media1' 'Espejo de backups del stack. Quedó libre tras mudar la biblioteca vieja a media4 (sep 2026). Disco externo NTFS.'
-  storage_json 'Disco 2 · Descargas y backups (NTFS)' '/mnt/media2' 'Torrents de qBittorrent, caché de Tdarr y backups principales del stack. Disco externo NTFS.'
-  storage_json 'Ruta de descargas' '/mnt/media2/downloads' 'Torrents en curso y completados (qBittorrent) + caché de transcode de Tdarr.'
-  storage_json 'Disco 3 · Biblioteca activa (ext4)' '/mnt/media3' 'Series y películas en ext4 + archivo chae.'
-  storage_json 'Disco 4 · Biblioteca y contenido nuevo (ext4)' '/mnt/media4' 'Películas mudadas desde media1 (sep 2026) + destino de todo el contenido nuevo por política mfs.'
+  # Pool + todas las ramas, leídas de .media-branches.conf (N discos, sin hardcodear)
+  _cfg="${MEDIA_BRANCHES_CONFIG:-/home/chae/stack/.media-branches.conf}"
+  _pool="$(awk -F= '$1=="MEDIA_POOL"{print substr($0,index($0,"=")+1); exit}' "$_cfg" 2>/dev/null)"
+  _branches_raw="$(awk -F= '$1=="MEDIA_BRANCHES"{print substr($0,index($0,"=")+1); exit}' "$_cfg" 2>/dev/null)"
+  _pool="${_pool:-/mnt/media}"
+  _n=0
+  storage_json 'Pool de medios (mergerfs)' "$_pool" 'Unión de los discos del pool — es lo que ven Jellyfin, Radarr y Sonarr. El contenido nuevo cae en el disco con más espacio (mfs).'
+  if [ -n "$_branches_raw" ]; then
+    IFS=':' read -ra _bl <<< "$_branches_raw"
+    for _b in "${_bl[@]}"; do
+      [ -n "$_b" ] || continue
+      _n=$((_n + 1))
+      case "$_b" in
+        */media1) _note='Espejo de backups del stack (backups/stack/) + rescates.' ;;
+        */media2) _note='Descargas de qBittorrent (downloads/), caché de Tdarr y backups principales.' ;;
+        */media3|*/media4) _note='Biblioteca activa (series/películas).' ;;
+        */media5|*/media6) _note='Rama libre del pool — absorbe el contenido nuevo (mfs).' ;;
+        *) _note='Rama del pool mergerfs (ext4).' ;;
+      esac
+      storage_json "Disco $_n · ${_b##*/} (ext4)" "$_b" "$_note"
+    done
+  fi
+  storage_json 'Ruta de descargas' "$DOWNLOADS_ROOT" 'Torrents en curso y completados (qBittorrent) + caché de transcode de Tdarr.'
 } | jq -s '.')"
 
 running_containers="$(docker ps -q | wc -l | tr -d ' ')"

@@ -16,11 +16,38 @@ ENV_PATH = os.path.join(HOME, ".config", "chaetop", "chaetop.env")
 HOSTNAME = socket.gethostname()
 QBIT_URL = "http://127.0.0.1:8080"
 
-MEDIA1_PATH = "/mnt/media1"
-MEDIA2_PATH = "/mnt/media2"
 MEDIA_POOL = "/mnt/media"
-MEDIA1_UUID = "E41C8ED01C8E9CE4"
-MEDIA2_UUID = "3FD22A422077368D"
+MEDIA_BRANCHES_CONF = os.path.join(HOME, "stack", ".media-branches.conf")
+BRANCH_PATHS = []
+BRANCH_UUID_BY_PATH = {}
+
+
+def load_media_branches():
+    global BRANCH_PATHS, BRANCH_UUID_BY_PATH
+    branches, uuids = [], []
+    try:
+        with open(MEDIA_BRANCHES_CONF) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k, v = k.strip(), v.strip()
+                if k == "MEDIA_BRANCHES":
+                    branches = [p for p in v.split(":") if p]
+                elif k == "MEDIA_UUIDS":
+                    uuids = [u for u in v.split(":") if u]
+    except OSError:
+        pass
+    if branches and len(branches) == len(uuids):
+        BRANCH_PATHS = branches
+        BRANCH_UUID_BY_PATH = dict(zip(branches, uuids))
+    else:
+        BRANCH_PATHS = []
+        BRANCH_UUID_BY_PATH = {}
+
+
+load_media_branches()
 
 STACK_SCRIPTS = os.path.join(HOME, "stack", "scripts")
 UPDATE_SCRIPT = os.path.join(STACK_SCRIPTS, "update-media-stack.sh")
@@ -89,6 +116,7 @@ SNAP = {
     "disks": [],
     "media": {},
     "media_err": "",
+    "repair": {},
 }
 
 ENV = None
@@ -121,19 +149,28 @@ def local_ip():
 
 
 def human_bytes(n):
-    for unit in ("", "K", "M", "G", "T"):
+    try:
+        n = float(n)
+    except (TypeError, ValueError):
+        return "-"
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
         if abs(n) < 1024:
-            return f"{n:.0f}{unit}" if unit == "" or n >= 10 else f"{n:.1f}{unit}"
+            if unit == "B":
+                return f"{n:.0f} B"
+            return f"{n:.1f} {unit}" if n < 10 else f"{n:.0f} {unit}"
         n /= 1024
-    return f"{n:.1f}P"
+    return f"{n:.1f} PiB"
 
 
 def api_get(url, headers=None, timeout=6):
-    req = urllib.request.Request(url)
-    for k, v in (headers or {}).items():
-        req.add_header(k, v)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode(errors="replace"))
+    try:
+        req = urllib.request.Request(url)
+        for k, v in (headers or {}).items():
+            req.add_header(k, v)
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode(errors="replace"))
+    except Exception:
+        return None
 
 
 DOCKER = shutil.which("docker") or "/usr/bin/docker"
@@ -342,10 +379,8 @@ def disk_collect():
                 "pct": pct,
                 "health": "",
             }
-            if mp == MEDIA1_PATH:
-                disk["health"] = mount_health(mp, MEDIA1_UUID)
-            elif mp == MEDIA2_PATH:
-                disk["health"] = mount_health(mp, MEDIA2_UUID)
+            if mp in BRANCH_UUID_BY_PATH:
+                disk["health"] = mount_health(mp, BRANCH_UUID_BY_PATH[mp])
             disks.append(disk)
 
         with LOCK:
@@ -357,56 +392,47 @@ def media_collect():
     global ENV
     while True:
         media = {}
+        env = ENV or {}
         try:
-            jf_key = ENV.get("JELLYFIN_KEY", "")
+            jf_key = env.get("JELLYFIN_KEY", "")
             if jf_key:
                 hdr = {"Authorization": f'MediaBrowser Token="{jf_key}"'}
-                try:
-                    counts = api_get("http://127.0.0.1:8096/Items/Counts", hdr)
-                    media["jf_lib"] = f"{counts.get('MovieCount', 0)} pelis · {counts.get('SeriesCount', 0)} series · {counts.get('EpisodeCount', 0)} eps"
-                except Exception:
-                    pass
-                try:
-                    sessions = api_get("http://127.0.0.1:8096/Sessions", hdr)
-                    playing = [s for s in sessions if s.get("NowPlayingItem")]
-                    media["jf_sessions"] = [
-                        f"{s.get('UserName', '?')} · {(s.get('NowPlayingItem') or {}).get('Name', '?')}"
-                        for s in playing[:3]
-                    ]
-                except Exception:
-                    pass
+                counts = api_get("http://127.0.0.1:8096/Items/Counts", hdr) or {}
+                if counts:
+                    media["jf_lib"] = (f"{counts.get('MovieCount', 0)} pelis · "
+                                       f"{counts.get('SeriesCount', 0)} series · "
+                                       f"{counts.get('EpisodeCount', 0)} eps")
+                sessions = api_get("http://127.0.0.1:8096/Sessions", hdr) or []
+                playing = [s for s in sessions if isinstance(s, dict) and s.get("NowPlayingItem")]
+                media["jf_sessions"] = [
+                    f"{s.get('UserName', '?')} · {(s.get('NowPlayingItem') or {}).get('Name', '?')}"
+                    for s in playing[:3]
+                ]
 
-            rk = ENV.get("RADARR_KEY", "")
+            rk = env.get("RADARR_KEY", "")
             if rk:
                 hdr = {"X-Api-Key": rk}
-                try:
-                    movies = api_get("http://127.0.0.1:7878/api/v3/movie", hdr)
+                movies = api_get("http://127.0.0.1:7878/api/v3/movie", hdr)
+                if isinstance(movies, list):
                     total = len(movies)
-                    have = sum(1 for m in movies if m.get("hasFile"))
-                    q = api_get("http://127.0.0.1:7878/api/v3/queue?pageSize=1", hdr)
+                    have = sum(1 for m in movies if isinstance(m, dict) and m.get("hasFile"))
+                    q = api_get("http://127.0.0.1:7878/api/v3/queue?pageSize=1", hdr) or {}
                     media["radarr"] = (total, total - have, q.get("totalRecords", 0))
-                except Exception:
-                    pass
 
-            sk = ENV.get("SONARR_KEY", "")
+            sk = env.get("SONARR_KEY", "")
             if sk:
                 hdr = {"X-Api-Key": sk}
-                try:
-                    series = api_get("http://127.0.0.1:8989/api/v3/series", hdr)
-                    q = api_get("http://127.0.0.1:8989/api/v3/queue?pageSize=1", hdr)
-                    miss = api_get("http://127.0.0.1:8989/api/v3/wanted/missing?pageSize=1&includeMonitored=true", hdr)
+                series = api_get("http://127.0.0.1:8989/api/v3/series", hdr)
+                if isinstance(series, list):
+                    q = api_get("http://127.0.0.1:8989/api/v3/queue?pageSize=1", hdr) or {}
+                    miss = api_get("http://127.0.0.1:8989/api/v3/wanted/missing?pageSize=1&includeMonitored=true", hdr) or {}
                     media["sonarr"] = (len(series), miss.get("totalRecords", 0), q.get("totalRecords", 0))
-                except Exception:
-                    pass
 
-            sk2 = ENV.get("SEERR_KEY", "")
+            sk2 = env.get("SEERR_KEY", "")
             if sk2:
                 hdr = {"X-Api-Key": sk2}
-                try:
-                    req = api_get("http://127.0.0.1:5055/api/v1/request?take=1&skip=0&filter=processing", hdr)
-                    media["seerr"] = req.get("pageInfo", {}).get("results", 0)
-                except Exception:
-                    pass
+                req = api_get("http://127.0.0.1:5055/api/v1/request?take=1&skip=0&filter=processing", hdr) or {}
+                media["seerr"] = (req.get("pageInfo") or {}).get("results", 0)
 
             with LOCK:
                 SNAP["media"] = media
@@ -415,6 +441,66 @@ def media_collect():
             with LOCK:
                 SNAP["media_err"] = f"error: {e}"
         time.sleep(20)
+
+
+REPAIR_LOGS = [
+    os.path.join(HOME, "stack", "logs", "repair-girls.log"),
+    os.path.join(HOME, "stack", "logs", "repair-all.log"),
+]
+
+
+def repair_collect():
+    while True:
+        rep = {}
+        try:
+            log = ""
+            for f in REPAIR_LOGS:
+                if os.path.isfile(f) and os.path.getsize(f) > 0:
+                    log = f
+            for f in REPAIR_LOGS:
+                try:
+                    with open(f, errors="replace") as fh:
+                        tail = fh.read()[-4000:]
+                    if "whisper+traducir:" in tail and "reparados" not in tail.split("whisper+traducir:")[-1]:
+                        log = f
+                except OSError:
+                    pass
+            if log:
+                try:
+                    with open(log, errors="replace") as fh:
+                        txt = fh.read()
+                except OSError:
+                    txt = ""
+                ok = txt.count("-> OK")
+                bad = sum(txt.count(s) for s in (
+                    "no devolvio SRT", "no se pudo extraer",
+                    "fallo la traduccion", "QA rechazo"))
+                import re as _re
+                m = _re.findall(r"\[(\d+)/(\d+)\]", txt)
+                cur, total = (m[-1] if m else ("", ""))
+                running = False
+                try:
+                    running = subprocess.run(
+                        ["pgrep", "-f", "fix_subs_whisper.py fix-broken"],
+                        capture_output=True, timeout=3).returncode == 0
+                except Exception:
+                    running = False
+                cur_items = _re.findall(r"whisper\+traducir: (.+?) \(dur=", txt)
+                last = ""
+                for line in txt.splitlines():
+                    if line.startswith("["):
+                        last = line
+                rep = {
+                    "log": os.path.basename(log), "ok": ok, "bad": bad,
+                    "cur": cur, "total": total, "running": running,
+                    "item": cur_items[-1] if (running and cur_items) else "",
+                    "last": last[:110],
+                }
+        except Exception as e:
+            rep = {"err": str(e)[:60]}
+        with LOCK:
+            SNAP["repair"] = rep
+        time.sleep(3)
 
 
 def read_cpu():
@@ -432,11 +518,12 @@ def read_mem():
         for line in f:
             k, v = line.split(":")
             info[k] = int(v.split()[0])
-    total = info["MemTotal"]
-    avail = info["MemAvailable"]
-    swap_t = info.get("SwapTotal", 0)
-    swap_f = info.get("SwapFree", 0)
-    return total, total - avail, swap_t, swap_t - swap_f
+    kb = 1024.0
+    total = info["MemTotal"] * kb
+    used = (info["MemTotal"] - info["MemAvailable"]) * kb
+    swap_t = info.get("SwapTotal", 0) * kb
+    swap_u = (info.get("SwapTotal", 0) - info.get("SwapFree", 0)) * kb
+    return total, used, swap_t, swap_u
 
 
 def read_net():
@@ -471,6 +558,15 @@ def read_temps():
     return temps
 
 
+def clip(s, n):
+    s = str(s)
+    if n <= 0:
+        return ""
+    if len(s) <= n:
+        return s
+    return s[:max(0, n - 1)] + "…"
+
+
 def bar(w, pct, char="█", empty="░"):
     n = max(0, min(int(w * pct / 100), w))
     return char * n + empty * (w - n)
@@ -501,9 +597,19 @@ class Chaetop:
         self.W = curses.color_pair(6)
         self.D = curses.A_DIM
 
-    def safe(self, y, x, text, attr=0, w=200):
+    def safe(self, y, x, text, attr=0, w=None):
         try:
-            self.stdscr.addnstr(max(0, y), max(0, x), str(text), w, attr)
+            H, W = self.stdscr.getmaxyx()
+            y = max(0, y)
+            x = max(0, x)
+            if y >= H or x >= W:
+                return
+            n = (W - x) if w is None else min(w, W - x)
+            if y == H - 1:
+                n = min(n, W - x - 1)
+            if n <= 0:
+                return
+            self.stdscr.addnstr(y, x, str(text), n, attr)
         except curses.error:
             pass
 
@@ -514,11 +620,19 @@ class Chaetop:
             return self.Y
         return self.G
 
-    def gauge(self, y, x, w, label, pct, extra=""):
+    def gauge(self, y, x, w, label, pct, extra="", extra_max=None):
         col = self.pct_color(pct)
         self.safe(y, x, f"{label:<7}", self.C)
         self.safe(y, x + 7, bar(w, pct), col)
-        self.safe(y, x + 7 + w, f" {pct:4.1f}% {extra}", self.D)
+        tail = f" {pct:4.1f}% {extra}".rstrip()
+        if extra_max is not None:
+            _, W = self.stdscr.getmaxyx()
+            room = min(extra_max, W - (x + 7 + w))
+            if room <= 0:
+                return
+            self.safe(y, x + 7 + w, tail, self.D, room)
+        else:
+            self.safe(y, x + 7 + w, tail, self.D)
 
     def draw_disks(self, y, H, W):
         self.safe(y, 0, "DISCOS Y MOUNTS", self.M | curses.A_BOLD)
@@ -529,63 +643,113 @@ class Chaetop:
         if not disks:
             self.safe(y, 2, "cargando…", self.D)
             return y + 2
-        cmap = {"ok": self.G, "": self.D}
-        bw = max(16, min(70, W - 74))
-        meta_x = 13 + bw + 40
+        # columnas fijas: label(12) barra(bw) pct(7) used/total(23) libre(18) meta(22) health(6)
+        bw = max(12, min(46, W - 98))
+        col_lbl, col_bar = 0, 13
+        col_pct = col_bar + bw
+        col_sz = col_pct + 7
+        col_free = col_sz + 24
+        col_meta = col_free + 19
         for d in disks:
-            if y >= H - 4:
+            if y >= H - 3:
                 break
             label = d["path"] if d["path"] == "/" else os.path.basename(d["path"].rstrip("/")) or d["path"]
-            self.safe(y, 0, f"{label[:12]:<12}", self.C)
-            self.safe(y, 13, bar(bw, d["pct"]), self.pct_color(d["pct"], 90, 80))
-            self.safe(y, 13 + bw, f" {d['pct']:4.1f}%  {human_bytes(d['used'])}/{human_bytes(d['total'])}  libre {human_bytes(d['free'])}", self.D)
+            self.safe(y, col_lbl, f"{label[:12]:<12}", self.C)
+            self.safe(y, col_bar, bar(bw, d["pct"]), self.pct_color(d["pct"], 90, 80))
+            self.safe(y, col_pct, f"{d['pct']:5.1f}% ", self.D, 7)
+            self.safe(y, col_sz, f"{human_bytes(d['used'])} / {human_bytes(d['total'])}", self.D, 23)
+            self.safe(y, col_free, f"libre {human_bytes(d['free'])}", self.G if d["pct"] < 90 else self.Y, 18)
             meta = f"{d['dev']} · {d['fstype']}"
-            self.safe(y, min(meta_x, W - 38), meta, self.D, 24)
+            self.safe(y, col_meta, clip(meta, max(0, W - col_meta - 10)), self.D, max(0, W - col_meta - 10))
             if d["health"]:
                 col = self.G if d["health"] == "ok" else self.R
-                self.safe(y, W - 14, f"[{d['health']}]", col)
+                self.safe(y, W - 8, f"[{d['health']}]", col)
             y += 1
         return y + 1
 
     def draw_media(self, y, H, W):
-        self.safe(y, 0, "MEDIA STACK", self.M | curses.A_BOLD)
-        y += 1
         with LOCK:
             media = dict(SNAP["media"])
             merr = SNAP["media_err"]
-        if not media and not merr:
-            self.safe(y, 2, "cargando…", self.D)
-            return y + 2
         if merr and not media:
-            self.safe(y, 2, f"{merr}", self.R)
-            return y + 2
-
-        x2 = W // 2
-        line = f"Radarr   {media.get('radarr', ('-',))[0]} pelis · faltan {media.get('radarr', (0, 0))[1]} · cola {media.get('radarr', (0, 0, 0))[2]}"
-        self.safe(y, 0, "🎬 Jellyfin", self.Y)
-        self.safe(y, 12, media.get("jf_lib", "-"), self.D)
-        self.safe(y, x2, "🍿 Radarr", self.Y)
-        self.safe(y, x2 + 12, line[9:], self.D)
+            self.safe(y, 2, f"MEDIA STACK · {merr}", self.D, max(0, W - 4))
+            return y + 1
+        if not media:
+            return y
+        if y > H - 5:
+            return y
+        self.safe(y, 0, "MEDIA STACK", self.M | curses.A_BOLD)
         y += 1
-        sessions = media.get("jf_sessions", [])
+        x2 = max(48, W // 2)
+        rad = media.get("radarr") or (0, 0, 0)
+        son = media.get("sonarr") or (0, 0, 0)
+        self.safe(y, 0, "🎬 Jellyfin", self.Y)
+        self.safe(y, 12, clip(media.get("jf_lib") or "-", max(0, x2 - 14)), self.D, max(0, x2 - 14))
+        self.safe(y, x2, "🍿 Radarr", self.Y)
+        self.safe(y, x2 + 12, clip(f"{rad[0]} pelis · faltan {rad[1]} · cola {rad[2]}", max(0, W - x2 - 13)),
+                  self.D, max(0, W - x2 - 13))
+        y += 1
+        sessions = media.get("jf_sessions") or []
         if sessions:
             for s in sessions[:1]:
-                self.safe(y, 12, f"▶ {s}", self.G)
+                self.safe(y, 12, clip(f"▶ {s}", max(0, x2 - 14)), self.G, max(0, x2 - 14))
         else:
-            self.safe(y, 12, "sin reproducción activa", self.D)
-        line = f"Sonarr   {media.get('sonarr', ('-',))[0]} series · {media.get('sonarr', (0, 0))[1]} eps faltan · cola {media.get('sonarr', (0, 0, 0))[2]}"
+            self.safe(y, 12, "sin reproducción activa", self.D, max(0, x2 - 14))
         self.safe(y, x2, "📺 Sonarr", self.Y)
-        self.safe(y, x2 + 12, line[9:], self.D)
+        self.safe(y, x2 + 12, clip(f"{son[0]} series · {son[1]} eps faltan · cola {son[2]}", max(0, W - x2 - 13)),
+                  self.D, max(0, W - x2 - 13))
         y += 1
         if len(sessions) > 1:
             for s in sessions[1:3]:
-                self.safe(y, 12, f"▶ {s}", self.G)
+                self.safe(y, 12, clip(f"▶ {s}", max(0, x2 - 14)), self.G, max(0, x2 - 14))
                 y += 1
-        seerr = media.get("seerr")
-        if seerr is not None:
+        if media.get("seerr") is not None:
             self.safe(y, x2, "🎟 Seerr", self.Y)
-            self.safe(y, x2 + 12, f"{seerr} pedidos en proceso", self.D)
+            self.safe(y, x2 + 12, f"{media['seerr']} pedidos en proceso", self.D)
+            y += 1
         return y + 1
+
+    def draw_repair(self, y, H, W):
+        with LOCK:
+            rep = dict(SNAP["repair"])
+        if not rep:
+            return y
+        ok = int(rep.get("ok") or 0)
+        bad = int(rep.get("bad") or 0)
+        done = ok + bad
+        if not rep.get("running") and done == 0:
+            return y
+        if y > H - 4:
+            return y
+        self.safe(y, 0, "SRT REPAIR", self.M | curses.A_BOLD)
+        total = str(rep.get("total") or "")
+        gw = max(10, min(24, W - 78))
+        col = 12
+        if total.isdigit() and int(total) > 0:
+            pct = done * 100.0 / int(total)
+            self.safe(y, col, bar(gw, pct), self.pct_color(pct, hi=95, mid=80))
+            col += gw + 1
+            self.safe(y, col, f"{pct:4.0f}%", self.C, 5)
+            col += 6
+            self.safe(y, col, f"{done}/{total}", self.W, 8)
+            col += 8
+        else:
+            self.safe(y, col, f"{done} procesados", self.C, 14)
+            col += 15
+        self.safe(y, col, f"✓{ok}", self.G, 6)
+        col += 6
+        self.safe(y, col, f"✗{bad}", self.R if bad else self.D, 6)
+        col += 7
+        if rep.get("running"):
+            self.safe(y, col, "EN CURSO", self.G | curses.A_BOLD, 10)
+        else:
+            self.safe(y, col, "DETENIDO", self.Y | curses.A_BOLD, 10)
+        y += 1
+        item = str(rep.get("item") or "")
+        if item and y <= H - 3:
+            self.safe(y, 12, clip(f"▶ {item}", max(0, W - 14)), self.W, max(0, W - 14))
+            y += 1
+        return y
 
     def draw(self):
         stdscr = self.stdscr
@@ -616,9 +780,6 @@ class Chaetop:
         self.last_net = (now, rx2, tx2)
 
         temps = read_temps()
-        t_txt = ""
-        if temps:
-            t_txt = f"  temp {max(temps):.0f}°C"
 
         with LOCK:
             services = list(SNAP["services"])
@@ -626,38 +787,48 @@ class Chaetop:
             qbit = SNAP["qbit"]
             qbit_err = SNAP["qbit_err"]
             docker_err = SNAP["docker_err"]
+            repair = dict(SNAP["repair"])
 
-        self.safe(0, 0, "◆ chaetop", self.M | curses.A_BOLD)
-        self.safe(0, 11, f"{HOSTNAME} · {local_ip()}", self.W)
-        self.safe(0, 40, f"up {up_s}  load {load1:.2f} {load5:.2f} {load15:.2f}{t_txt}", self.D,
-                  max(0, W - 40 - 20))
-        self.safe(0, W - 19, time.strftime("%a %d/%m %H:%M:%S"), self.C)
+        stamp = time.strftime("%a %d/%m %H:%M:%S")
+        left = f"◆ chaetop   {HOSTNAME} · {local_ip()}"
+        mid = f"up {up_s}   load {load1:.2f} {load5:.2f} {load15:.2f}"
+        if temps:
+            mid += f"   {max(temps):.0f}°C"
+        mid_x = min(len(left) + 2, max(0, W - 18 - len(mid) - 2))
+        self.safe(0, 0, clip(left, max(0, mid_x - 1)), self.M | curses.A_BOLD, mid_x)
+        self.safe(0, mid_x, clip(mid, max(0, W - 18 - mid_x)), self.D, max(0, W - 18 - mid_x))
+        self.safe(0, W - 18, stamp, self.C, 18)
         self.safe(1, 0, "─" * (W - 1), self.D)
 
         y = 2
-        gw = max(10, W - 60)
-        self.gauge(y, 0, gw, "CPU", cpu_pct, f"{os.cpu_count()} núcleos")
-        self.safe(y, W - 44, f"▼ {human_bytes(rx_s) + '/s':<12} ▲ {human_bytes(tx_s) + '/s':<12}", self.Y)
+        NET_W = 30
+        gw = max(12, W - 78)
+        extra_max = max(10, W - 43 - gw)
+        self.gauge(y, 0, gw, "CPU", cpu_pct, f"{os.cpu_count()} núcleos", extra_max)
+        self.safe(y, W - NET_W, f"▼ {human_bytes(rx_s)}/s  ▲ {human_bytes(tx_s)}/s", self.Y, NET_W)
         y += 1
-        self.gauge(y, 0, gw, "RAM", mem_pct, f"{human_bytes(mem_u * 1024)} / {human_bytes(mem_t * 1024)}")
+        self.gauge(y, 0, gw, "RAM", mem_pct, f"{human_bytes(mem_u)} / {human_bytes(mem_t)}", extra_max)
         y += 1
         if swap_t:
-            self.gauge(y, 0, gw, "SWAP", swap_u / swap_t * 100 if swap_t else 0,
-                       f"{human_bytes(swap_u * 1024)} / {human_bytes(swap_t * 1024)}")
+            self.gauge(y, 0, gw, "SWAP", swap_u / swap_t * 100,
+                       f"{human_bytes(swap_u)} / {human_bytes(swap_t)}", extra_max)
             y += 1
 
         y += 1
+        if repair.get("running") or (int(repair.get("ok") or 0) + int(repair.get("bad") or 0)) > 0:
+            y = self.draw_repair(y, H, W)
+            y += 1
+
         y = self.draw_disks(y, H, W)
 
-        if W >= 90 and H >= 22:
-            y = self.draw_media(y, H, W)
+        y = self.draw_media(y, H, W)
 
         if qbit and (W >= 90 and H >= 22):
             self.safe(y, 0, "TORRENTS (qBittorrent)", self.M | curses.A_BOLD)
             tr = qbit["transfer"]
             dl = tr.get("dl_info_speed", 0)
             ul = tr.get("up_info_speed", 0)
-            self.safe(y, 26, f"▼ {human_bytes(dl)+'/s':<11} ▲ {human_bytes(ul)+'/s':<11}", self.Y)
+            self.safe(y, 26, f"▼ {human_bytes(dl)}/s   ▲ {human_bytes(ul)}/s", self.Y)
             y += 1
             if not qbit["torrents"]:
                 self.safe(y, 2, "sin actividad", self.D)
@@ -665,10 +836,13 @@ class Chaetop:
             for t in qbit["torrents"]:
                 if y >= H - 3:
                     break
-                name = (t.get("name", "?"))[:min(46, W - 60)]
-                self.safe(y, 2, name, self.W)
-                self.safe(y, 50, bar(18, t.get("progress", 0) * 100), self.C)
-                self.safe(y, 70, f"{t.get('progress', 0) * 100:5.1f}%  ▼{human_bytes(t.get('dlspeed', 0))+'/s':<10} ETA {fmt_eta(t.get('eta', -1))}", self.D)
+                name_w = max(16, W - 48)
+                self.safe(y, 2, t.get("name", "?"), self.W, name_w)
+                self.safe(y, 2 + name_w, bar(16, t.get("progress", 0) * 100), self.C)
+                self.safe(y, 19 + name_w, f"{t.get('progress', 0) * 100:5.1f}%", self.D, 6)
+                self.safe(y, 26 + name_w,
+                          f"▼{human_bytes(t.get('dlspeed', 0))}/s  ETA {fmt_eta(t.get('eta', -1))}",
+                          self.D)
                 y += 1
             y += 1
         elif qbit_err and (W >= 90 and H >= 22):
@@ -680,44 +854,52 @@ class Chaetop:
             self.safe(y, 0, f"docker error: {docker_err}", self.R)
             y += 2
 
-        rows = max(3, H - y - 2)
-        self.safe(y, 0, "SERVICIOS DOCKER", self.M | curses.A_BOLD)
-        self.safe(y, 24, f"{'ESTADO':<9} {'SALUD':<10} {'CPU':>6} {'MEM':>9} {'PUERTO':>6}  URL", self.D)
-        y += 1
+        rows = max(0, H - y - 2)
+        # columnas fijas compartidas por cabecera y filas
+        C_NAME, C_EST, C_SAL, C_CPU, C_MEM, C_MEMPC, C_PTO, C_URL = 0, 26, 37, 48, 55, 67, 74, 82
+        if rows > 0 and y <= H - 4:
+            self.safe(y, 0, "SERVICIOS DOCKER", self.M | curses.A_BOLD)
+            self.safe(y, C_EST, f"{'ESTADO':<10}", self.D)
+            self.safe(y, C_SAL, f"{'SALUD':<10}", self.D)
+            self.safe(y, C_CPU, f"{'CPU%':>6}", self.D)
+            self.safe(y, C_MEM, f"{'MEM':>11}", self.D)
+            self.safe(y, C_MEMPC, f"{'MEM%':>6}", self.D)
+            self.safe(y, C_PTO, f"{'PUERTO':>6}", self.D)
+            if W > C_URL:
+                self.safe(y, C_URL, "URL", self.D)
+            y += 1
 
         services.sort(key=lambda s: (s["name"] not in CORE, s["name"]))
         services = services[:max(0, rows - 1)]
-        if not services:
+        if not services and rows > 0 and y <= H - 3:
             self.safe(y, 2, "cargando…", self.D)
         for i, s in enumerate(services):
-            if y + i >= H - 1:
+            if y + i > H - 3:
                 break
             st = stats.get(s["name"], ("-", "-", "-"))
             sel = i == self.sel
             attr_sel = curses.A_REVERSE if sel else 0
             up = "running" in s["state"] or s["state"] == "running"
-            healthy = "healthy" in s["status"]
             st_mark = self.G if up else self.R
             h_mark = self.G if "healthy" in s["status"] else (self.Y if "health" in s["status"] else self.D)
             core_m = self.M if s["name"] in CORE else self.D
-            self.safe(y + i, 0, f"{'▶' if sel else ' '}{s['name'][:23]:<23}", attr_sel | core_m)
-            self.safe(y + i, 24, f"{'● running' if up else '✗ caído  ':<9}", attr_sel | st_mark)
-            self.safe(y + i, 34, f"{health_txt(s['status']):<10}", attr_sel | h_mark)
-            self.safe(y + i, 45, f"{st[0]:>5}%", attr_sel)
-            mem_u = st[1].split("/")[0].strip()
-            self.safe(y + i, 52, f"{mem_u:>8} {st[2]:>4}%", attr_sel)
+            self.safe(y + i, C_NAME, f"{'▶' if sel else ' '}{s['name'][:23]:<23}", attr_sel | core_m)
+            self.safe(y + i, C_EST, f"{'● running' if up else '✗ caído':<10}", attr_sel | st_mark)
+            self.safe(y + i, C_SAL, f"{health_txt(s['status']):<10}", attr_sel | h_mark)
+            self.safe(y + i, C_CPU, f"{st[0]:>5}%", attr_sel)
+            mem_u = (st[1] or "").split("/")[0].strip() or "-"
+            self.safe(y + i, C_MEM, f"{mem_u:>11}", attr_sel)
+            self.safe(y + i, C_MEMPC, f"{st[2]:>5}%", attr_sel)
             port = PORTS.get(s["name"], "")
-            if port:
-                self.safe(y + i, 68, f"{port:>6}", attr_sel | self.C)
-                if W >= 90:
-                    self.safe(y + i, 76, f"http://127.0.0.1:{port}", attr_sel | self.D)
-            else:
-                self.safe(y + i, 68, "   ---", attr_sel | self.D)
+            self.safe(y + i, C_PTO, f"{port if port else '—':>6}", attr_sel | (self.C if port else self.D))
+            if port and W > C_URL + 8:
+                self.safe(y + i, C_URL,
+                          clip(f"http://127.0.0.1:{port}", max(0, W - C_URL)),
+                          attr_sel | self.D, max(0, W - C_URL))
 
         self.safe(H - 2, 0, "─" * (W - 1), self.D)
-        self.safe(H - 1, 0,
-                  " q salir · j/k servicio · l logs · r reiniciar · s shell · u preview updates · U actualizar servicio · m mounts · d docker · ? ayuda ",
-                  self.D)
+        foot = " q salir · j/k servicio · l logs · r reiniciar · s shell · u updates · m mounts · d docker · ? ayuda "
+        self.safe(H - 1, 0, clip(foot, W - 2), self.D, W - 2)
 
         self.sel = max(0, min(self.sel, len(services) - 1))
         stdscr.refresh()
@@ -841,6 +1023,7 @@ def main(stdscr):
     threading.Thread(target=qbit_collect, daemon=True).start()
     threading.Thread(target=disk_collect, daemon=True).start()
     threading.Thread(target=media_collect, daemon=True).start()
+    threading.Thread(target=repair_collect, daemon=True).start()
 
     curses.curs_set(0)
     stdscr.nodelay(True)

@@ -5,7 +5,7 @@ set -u
 WD_LOG="/var/log/media-pool-watchdog.log"
 REC_LOG="${MEDIA_MOUNT_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/media-mount-recovery}/recovery.log"
 REC_STATE="${MEDIA_MOUNT_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/media-mount-recovery}/last_state"
-UPD_LOG="/home/chae/scripts/check_es_subs.log"
+UPD_LOG="/home/chae/stack/scripts/check_es_subs.log"
 
 B='\033[36m'; N='\033[0m'; D='\033[2m'
 

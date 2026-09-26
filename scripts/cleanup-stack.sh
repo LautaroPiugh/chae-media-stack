@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-STACK_DIR="$HOME/services"
+STACK_DIR="$HOME/stack/services"
 STATE_DIR="${CLEANUP_STATE_DIR:-$HOME/.local/state/cleanup-stack}"
 LOG_FILE="$STATE_DIR/cleanup.log"
 LOCK_FILE="$STATE_DIR/cleanup.lock"
@@ -9,7 +9,7 @@ LAST_RUN_FILE="$STATE_DIR/last-run.json"
 DRY_RUN="${DRY_RUN:-0}"
 NOTIFY_ENABLED="${CLEANUP_NOTIFY_ENABLED:-1}"
 NOTIFY_URL="${CLEANUP_NOTIFY_URL:-http://127.0.0.1:3555/notify/system-update}"
-BOT_ENV_FILE="${CLEANUP_BOT_ENV_FILE:-$HOME/services/jellyfin-whatsapp-bot/.env}"
+BOT_ENV_FILE="${CLEANUP_BOT_ENV_FILE:-$HOME/stack/jellyfin-whatsapp-bot/.env}"
 
 umask 022
 mkdir -p "$STATE_DIR"
@@ -77,7 +77,7 @@ RESULT_LINES+=("$(purge_dir_contents 'PapeleraNTFS_media2' '/mnt/media2/$RECYCLE
 RESULT_LINES+=("$(purge_dir_contents 'PapeleraNTFS_media3' '/mnt/media3/$RECYCLE.BIN')")
 RESULT_LINES+=("$(purge_dir_contents 'Cache_Jellyfin' "$STACK_DIR/jellyfin/config/cache/transcodes")")
 RESULT_LINES+=("$(purge_dir_contents 'Log_Jellyfin' "$STACK_DIR/jellyfin/config/log")")
-RESULT_LINES+=("$(purge_dir_contents 'Cache_Tdarr' "$STACK_DIR/tdarr/cache")")
+RESULT_LINES+=("$(purge_dir_contents 'Cache_Tdarr' '/mnt/media2/downloads/tdarr-cache')")
 
 DOCKER_FREED=0
 if [[ "$DRY_RUN" == '0' ]]; then

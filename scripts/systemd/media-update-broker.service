@@ -9,7 +9,7 @@ Type=simple
 EnvironmentFile=-/home/chae/stack/jellyfin-whatsapp-bot/.env
 Environment=MEDIA_UPDATE_BROKER_SOCKET=/home/chae/.local/run/chae-media-update/broker.sock
 Environment=UPDATE_BROKER_SECRET_FILE=/home/chae/stack/jellyfin-whatsapp-bot/auth/update-broker.secret
-ExecStart=/usr/bin/python3 /home/chae/scripts/media-update-broker.py
+ExecStart=/usr/bin/python3 /home/chae/stack/scripts/media-update-broker.py
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

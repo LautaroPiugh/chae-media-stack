@@ -9,10 +9,12 @@ echo -e "${B}═══ REPARACIÓN MANUAL DE MONTURAS ═══${N}"
 echo
 
 echo -e "${B}── 1/3: watchdog del pool (remount si hace falta) ──${N}"
-if systemctl start media-pool-watchdog.service 2>&1; then
+# systemctl start de una unidad del sistema pasa por polkit, no por sudo;
+# por eso usamos sudo (hay una regla NOPASSWD para esta unidad exacta).
+if sudo /usr/bin/systemctl start media-pool-watchdog.service 2>&1; then
   echo -e " ${G}unidad ejecutada sin error${N}"
 else
-  echo -e " ${Y}no se pudo lanzar la unidad (¿permiso polkit?); el timer lo intentará solo en ≤2 min${N}"
+  echo -e " ${Y}no se pudo lanzar la unidad (¿sudoers/polkit?); el timer lo intentará solo en ≤2 min${N}"
 fi
 
 echo
@@ -28,8 +30,18 @@ sleep 1
 echo
 echo -e "${B}── 3/3: estado resultante ──${N}"
 findmnt /mnt/media >/dev/null 2>&1 && echo -e " pool /mnt/media: ${G}montado${N}" || echo -e " pool /mnt/media: ${Y}NO montado${N}"
-mountpoint -q /mnt/media1 && mountpoint -q /mnt/media2 && mountpoint -q /mnt/media3 && mountpoint -q /mnt/media4 \
-  && echo -e " ramas media1/media2/media3/media4: ${G}montadas${N}" || echo -e " ramas: ${Y}alguna caída${N}"
+CONFIG_FILE="${MEDIA_BRANCHES_CONFIG:-/home/chae/stack/.media-branches.conf}"
+branches_raw="$(awk -F= '$1=="MEDIA_BRANCHES"{print substr($0, index($0,"=")+1); exit}' "$CONFIG_FILE" 2>/dev/null || true)"
+if [[ -n "$branches_raw" ]]; then
+  IFS=':' read -ra _branches <<< "$branches_raw"
+  all_up=1
+  for _b in "${_branches[@]}"; do
+    mountpoint -q "$_b" || { all_up=0; echo -e "   $_b: ${Y}NO montada${N}"; }
+  done
+  [[ "$all_up" -eq 1 ]] && echo -e " ramas ($(echo "$branches_raw" | tr ':' ' ')): ${G}montadas${N}"
+else
+  echo -e " ramas: ${Y}sin config ($CONFIG_FILE)${N}"
+fi
 
 state="$(cat "${MEDIA_MOUNT_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/media-mount-recovery}/last_state" 2>/dev/null || echo unknown)"
 echo -e " estado recovery: $state"
