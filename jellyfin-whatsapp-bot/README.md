@@ -136,7 +136,7 @@ Enviá estos comandos por WhatsApp:
 | `/reiniciar` | **(admin)** Reinicia el bot |
 | `/reconectar` | **(admin)** Reconecta WhatsApp Web |
 | `/limpiartorrents` | **(admin)** Limpia torrents completados de qBittorrent |
-| `/registraradmin` | Registra al usuario como admin (código: `0420`) |
+| `/registraradmin` | Registra al usuario como admin (código configurado localmente) |
 | `/cancelar` | Cancela el flujo actual |
 | `/repetir` | Repite la página actual de resultados |
 | `/mas` | Siguiente página de resultados |
