@@ -5,7 +5,14 @@ DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Cargar configuración local (MEDIA_SERVER_IP, etc.)
 if [ -f "$DIR/.env" ]; then set -a; . "$DIR/.env"; set +a; fi
-export COMPOSE_PROJECT_NAME=media-stack
+# SIN export COMPOSE_PROJECT_NAME. Cada compose declara container_name, y los
+# 21 contenedores vivos usan el project name del directorio de su compose
+# (adb guard, radarr, tdarr…). Poner acá "media-stack" hacía que este script
+# buscara un project que no existe e intentara crear un segundo set con los
+# mismos container_name: conflicto. stop-stack.sh nunca exportó nada, así que
+# los dos scripts además no concordaban entre sí.
+# Si algún día se quiere un project name único, va en el .env de la raíz
+# (Compose lo lee solo desde ahí), no acá.
 
 SERVICES=(
   postgres
