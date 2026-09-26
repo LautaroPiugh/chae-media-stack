@@ -78,7 +78,7 @@ Soporte: [PostgreSQL] · [Uptime Kuma] · [Portainer] · [AdGuard Home] · [Main
 
 ## Servicios
 
-Todos los contenedores usan prefijo `chae-*` (ej: `chae-jellyfin`). Los puertos están publicados solo en la IP LAN del server y en localhost.
+Casi todos los contenedores usan prefijo `chae-*` (ej: `chae-jellyfin`). Las tres excepciones son `subgenai`, `jellyfin-whatsapp-bot` y `portainer`, que usan su nombre de proyecto de Compose. Los puertos están publicados solo en la IP LAN del server y en localhost.
 
 | Servicio | Puerto | Descripción |
 |----------|--------|-------------|
@@ -165,17 +165,19 @@ Flags útiles:
 | `--update` | `git pull` + recrea los contenedores |
 | `--uninstall` | Baja los contenedores (conserva datos) |
 
-El wizard crea un `.env` raíz con `MEDIA_SERVER_IP` y otras variables, y lo enlaza con symlinks dentro de cada `services/*/`. Todos los composes leen la IP desde ahí (`${MEDIA_SERVER_IP:-192.168.1.100}`), así que cambiarla después es editar un solo archivo.
+El wizard crea un `.env` raíz con `MEDIA_SERVER_IP` y otras variables, y copia su contenido a un `.env` en cada `services/*/` que tenga compose. Todos los composes leen la IP desde el `.env` de su propio directorio (`${MEDIA_SERVER_IP:-192.168.0.200}`), así que cambiarla después es editar el `.env` raíz **y** las copias.
 
 ### Paso 4 (alternativa) — Instalación manual
 
 Si preferís entender cada pieza:
 
 ```bash
-# 1. Crear las redes Docker compartidas
+# 1. Crear las redes Docker compartidas y el volumen de Portainer
 docker network create qbittorrent_default
 docker network create jellyfin_default
 docker network create prowlarr_default
+docker network create postgres_default
+docker volume create portainer_data
 
 # 2. Configuración central (.env raíz + symlinks por servicio)
 cat > .env <<'EOF'
@@ -302,20 +304,28 @@ Maintainerr limpia contenido ya visto según reglas
 ## Almacenamiento
 
 ```
-/mnt/media/              pool mergerfs (~2.1T) = media1 + media2 + media3
-  ├── movies/            películas (Radarr)
-  ├── series/            series (Sonarr)
-  ├── anime/             anime
-  ├── music/             música
-  ├── downloads/         torrents completados
-  └── backups/           backups automáticos
+  /mnt/media/              pool mergerfs (~5.4T) = media1..media6
+    ├── movies/            películas (Radarr)
+    ├── series/            series (Sonarr)
+    ├── anime/             anime
+    ├── music/             música
+    ├── downloads/         torrents completados
+    └── backups/           backups automáticos
 
-/mnt/media1/             HDD externo 1 (465G NTFS)
-/mnt/media2/             HDD externo 2 (699G NTFS)
-  ├── downloads/         destino de descargas de qBittorrent
-  └── backups/stack/     backups diarios
-/mnt/media3/             HDD 1TB (ext4) — destino del contenido nuevo
-```
+  /mnt/media1/             916G ext4 — espejo de backups
+    └── backups/stack/     copia de los backups automáticos
+  /mnt/media2/             916G ext4 — descargas + backups
+    ├── downloads/         destino de descargas de qBittorrent y caché de Tdarr
+    └── backups/stack/     backups diarios (origen)
+  /mnt/media3/             916G ext4 — biblioteca
+  /mnt/media4/             916G ext4 — biblioteca
+  /mnt/media5/             916G ext4 — rama libre
+  /mnt/media6/             916G ext4 — rama libre
+  ```
+
+  Todas las ramas son ext4 y se declaran en `.media-branches.conf`, que es la
+  fuente de verdad. Agregar un disco regenera ese archivo, `fstab` y el
+  drop-in de Docker juntos, con `scripts/add-media-disk.sh`.
 
 ## Redes y acceso remoto
 
@@ -340,7 +350,11 @@ Los servicios se comunican por nombre de contenedor como DNS (ej: `http://radarr
 - Webhooks protegidos con tokens secretos
 - `.env` con permisos `600`, excluidos del repo; API keys nunca commiteadas
 - Servicios corren con `PUID=1000`/`PGID=1000` (no-root)
-- Contenedores pineados por digest, con healthchecks y límites de memoria
+- 20 de 21 composes pineados por digest. La excepción es
+  `jellyfin-whatsapp-bot`, que se construye localmente desde el repo
+- 12 de 22 contenedores tienen healthcheck. Los 10 que no, ver más abajo
+- Límites de memoria en los servicios que los necesitan (tdarr 2g,
+  tdarr-node 8g, subgen 8g)
 
 ## Actualización y mantenimiento
 
