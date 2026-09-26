@@ -19,3 +19,13 @@ services:
       - "127.0.0.1:9000:9000"
       - "${MEDIA_SERVER_IP:-192.168.0.200}:9000:9000"
     mem_limit: 8g
+    networks:
+      # Bazarr (config.yaml, whisperai.endpoint) llama a http://subgenai:9000.
+      # Sin esta red compartida, subgenai queda en su bridge implicito
+      # (subgen_default) y Bazarr no lo resuelve: la generacion de subtitulos
+      # con Whisper no podia funcionar.
+      - qbittorrent_default
+
+networks:
+  qbittorrent_default:
+    external: true
