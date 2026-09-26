@@ -12,17 +12,24 @@ Servidor multimedia argentino con 15+ servicios Docker, bot de WhatsApp, túnel 
 |-----------|---------|
 | CPU | x86_64 |
 | RAM | 32GB (25,6G disponibles en uso normal) |
-| Disco sistema | SSD 220G (LVM ext4, 20% usado) |
-| Disco datos 1 | HDD externo 465G → `/mnt/media1` (NTFS) — espejo de backups (biblioteca mudada a media4 en sep 2026) |
-| Disco datos 2 | HDD externo 699G → `/mnt/media2` (NTFS) — descargas y backups |
-| Disco datos 3 | HDD 1TB → `/mnt/media3` (ext4) — biblioteca activa (series/películas) |
-| Disco datos 4 | HDD 1TB Seagate → `/mnt/media4` (ext4) — biblioteca de películas + destino de contenido nuevo (sep 2026) |
-| Pool mergerfs | `/mnt/media` = media1 + media2 + media3 + media4, ~3.0T total |
+| Disco sistema | SSD 220G (LVM ext4, 20% usado) — by-id estable `ata-HS-SSD-WAVE_S__240G_FZ8257638` (resuelve a `/dev/sdg` en la configuración actual) |
+| Disco datos 1 | HDD 1TB USB → `/mnt/media1` (ext4) — espejo de backups (`backups/stack/`) + rescate de sdf (`chae-archive/sdf-2026`, 5.5G de contabilidad) |
+| Disco datos 2 | HDD 1TB USB → `/mnt/media2` (ext4) — descargas (`downloads/`) y backups principales |
+| Disco datos 3 | HDD 1TB WD → `/mnt/media3` (ext4) — biblioteca activa (series/películas) |
+| Disco datos 4 | HDD 1TB Seagate → `/mnt/media4` (ext4) — biblioteca de películas + destino de contenido nuevo |
+| Disco datos 5 | HDD 1TB USB (ex-sdf) → `/mnt/media5` (ext4) — rama libre del pool (sep 2026) |
+| Disco datos 6 | HDD 1TB Seagate (ZN1NCYJL) → `/mnt/media6` (ext4) — rama libre del pool (sep 2026) |
+| Pool mergerfs | `/mnt/media` = media1 + media2 + media3 + media4 + media5 + media6, ~5,4T total |
 | DB | Radarr/Sonarr/Prowlarr en PostgreSQL (chae-postgres, sep 2026); Bazarr/Jellyfin siguen en SQLite |
+
+> **Nota sep 2026:** los discos NTFS viejos (media1 465G, media2 699G) se reemplazaron por
+> 1TB ext4. Los UUIDs de las ramas viven en `/home/chae/stack/.media-branches.conf`, que leen
+> `media-mount-recovery.sh`, `media-status.sh`, `chaetop` y `media-pool-watchdog.sh`.
+> Para agregar/quitar discos: `scripts/add-media-disk.sh` (ver abajo).
 
 ### Pool mergerfs (`/mnt/media`)
 
-Combina los cuatro discos. Política: `mfs` (most free space — escribe en el disco con más espacio libre). Mínimo 20G libres por disco. El contenido nuevo (descargas e importaciones de Radarr/Sonarr) aterriza en el disco con más espacio (media3 o media4, ambos ext4 de 916G).
+Combina los seis discos. Política: `mfs` (most free space — escribe en el disco con más espacio libre). Mínimo 20G libres por disco. El contenido nuevo (descargas e importaciones de Radarr/Sonarr) aterriza en el disco con más espacio.
 
 ```
 /mnt/media/
@@ -38,35 +45,62 @@ Combina los cuatro discos. Política: `mfs` (most free space — escribe en el d
 
 ### Script de recuperación
 
-`/home/chae/stack/scripts/media-mount-recovery.sh` corre cada 2 minutos vía cron. Valida las 4 ramas (media1, media2, media3, media4) y el pool mergerfs; si algo no está sano detiene los contenedores consumidores, y los reinicia solo cuando todo vuelve a estar correcto.
+`/home/chae/stack/scripts/media-mount-recovery.sh` corre cada 2 minutos vía cron. Valida cada rama
+(leídas de `.media-branches.conf`) y el pool mergerfs; si algo no está sano detiene los contenedores
+consumidores, y los reinicia solo cuando todo vuelve a estar correcto.
+
+`/home/chae/stack/scripts/media-pool-watchdog.sh` (systemd `media-pool-watchdog.service` + `.timer`,
+cada 2 minutos, como root) remonta ramas caídas y el pool, y loguea en
+`/var/log/media-pool-watchdog.log`. Se dispara a mano desde el popup de tmux (`prefix + R`)
+vía `stack-repair.sh`.
+
+### Gestión de discos
+
+- `fix-media-mounts.sh` (repo root, `sudo bash`) — reparación completa tras cambiar discos:
+  inspecciona `sdf` en read-only, formatea los discos nuevos como GPT+ext4, escribe
+  `.media-branches.conf`, la sección `# BEGIN media-pool` de `/etc/fstab`, el drop-in
+  `docker.service.d/media-mounts.conf`, monta ramas + pool y crea directorios base.
+  Identifica discos por `by-path` (puerto físico) y aborta si el disco tiene algo montado,
+  contiene `/`/`/boot`/`/boot/efi`, es un PV de LVM o mide 223,6G (el del sistema).
+- `scripts/add-media-disk.sh` (con `sudo`) — agrega un disco nuevo como la próxima rama `mediaN`:
+  lo formatea, lo suma a config/fstab/drop-in y remonta el pool. Mismo seguro que arriba.
+- `check-restore-sde.sh` / `rescue-and-format-sdf.sh` / `fix-ttyd-panel.sh` — herramientas puntuales
+  de la movida de discos de sep 2026 (quedan por si se repite).
+
+### Rescate de sdf (sep 2026)
+
+El disco `sdf` era un Ubuntu viejo con `/home/contabilidad` (9.632 documentos: Balanzas, Tesoro,
+SIPAF, `Contraseñas-Chrome.csv`, `Copia Datos Disco Viejo`, `Backup 01 diciembre 2025`). Se copió
+completo a `/mnt/media/chae-archive/sdf-2026/` (5.5G, verificado 817/817 docs, 10432/10432 escritorio)
+y recién después se formateó como `media5`.
 
 ### Limpieza manual (botón del panel)
 
-El panel Homepage (192.168.0.200:3003) tiene la tarjeta **"Limpieza del Stack"** (grupo Mantenimiento). El clic dispara la limpieza vía `chae-cleanup-api.service` (systemd, puerto 3655, script `/home/chae/stack/scripts/cleanup-stack.sh`): purga `$RECYCLE.BIN` de los discos NTFS (media1 y media2), cachés de transcode/logs de Jellyfin y prune de imágenes Docker colgantes; reporta espacio liberado y avisa por WhatsApp.
+El panel Homepage (192.168.0.200:3003) tiene la tarjeta **"Limpieza del Stack"** (grupo Mantenimiento). El clic dispara la limpieza vía `chae-cleanup-api.service` (systemd, puerto 3655, script `/home/chae/stack/scripts/cleanup-stack.sh`): purga cachés de transcode/logs de Jellyfin, caché de Tdarr (`/mnt/media2/downloads/tdarr-cache`) y prune de imágenes Docker colgantes; reporta espacio liberado y avisa por WhatsApp.
 
 ---
 
-## Servicios Docker (18 containers)
+## Servicios Docker (22 containers)
 
-Todos corren con `PUID=1000`, `PGID=1000` (usuario `chae`), `TZ=America/Argentina/Buenos_Aires`.
+Todos corren con `TZ=America/Argentina/Buenos_Aires`. De los 22 contenedores, 9 admiten `PUID`/`PGID` y las tienen configuradas: son los únicos que crean archivos como `1000:1000` (`chae`). Los demás no reciben esas variables. AdGuard y Scrutiny corren como root, y Scrutiny además es `privileged`. En los que sí las soportan, esto tampoco implica non-root: el PID 1 sigue siendo root y las imágenes de linuxserver bajan solo el proceso del servicio a uid 1000.
 
 ### Streaming & Visualización
 
 | Servicio | Puerto | URL | Imagen |
 |----------|--------|-----|--------|
-| **Jellyfin** | 8096 | `http://192.168.1.100:8096` | `lscr.io/linuxserver/jellyfin` |
-| **Jellyseerr** | 5055 | `http://192.168.1.100:5055` | `ghcr.io/seerr-team/seerr` |
-| **Uptime Kuma** | 3001 | `http://192.168.1.100:3001` | `louislam/uptime-kuma` |
+| **Jellyfin** | 8096 | `http://192.168.0.200:8096` | `lscr.io/linuxserver/jellyfin` |
+| **Jellyseerr** | 5055 | `http://192.168.0.200:5055` | `ghcr.io/seerr-team/seerr` |
+| **Uptime Kuma** | 3001 | `http://192.168.0.200:3001` | `louislam/uptime-kuma` |
 
 ### Gestión de Medios (Arr Stack)
 
 | Servicio | Puerto | URL Interna | URL Host | Imagen |
 |----------|--------|-------------|----------|--------|
-| **Radarr** | 7878 | `http://radarr:7878` | `http://192.168.1.100:7878` | `lscr.io/linuxserver/radarr` |
-| **Sonarr** | 8989 | `http://sonarr:8989` | `http://192.168.1.100:8989` | `lscr.io/linuxserver/sonarr` |
-| **Bazarr** | 6767 | `http://bazarr:6767` | `http://192.168.1.100:6767` | `lscr.io/linuxserver/bazarr` |
-| **Prowlarr** | 9696 | `http://prowlarr:9696` | `http://192.168.1.100:9696` | `lscr.io/linuxserver/prowlarr` |
-| **qBittorrent** | 8080 | `http://qbittorrent:8080` | `http://192.168.1.100:8080` | `lscr.io/linuxserver/qbittorrent` |
+| **Radarr** | 7878 | `http://radarr:7878` | `http://192.168.0.200:7878` | `lscr.io/linuxserver/radarr` |
+| **Sonarr** | 8989 | `http://sonarr:8989` | `http://192.168.0.200:8989` | `lscr.io/linuxserver/sonarr` |
+| **Bazarr** | 6767 | `http://bazarr:6767` | `http://192.168.0.200:6767` | `lscr.io/linuxserver/bazarr` |
+| **Prowlarr** | 9696 | `http://prowlarr:9696` | `http://192.168.0.200:9696` | `lscr.io/linuxserver/prowlarr` |
+| **qBittorrent** | 8080 | `http://qbittorrent:8080` | `http://192.168.0.200:8080` | `lscr.io/linuxserver/qbittorrent` |
 | **Flaresolverr** | 8191 | `http://flaresolverr:8191` | - | `ghcr.io/flaresolverr/flaresolverr` |
 
 ### Utilidades
@@ -74,13 +108,17 @@ Todos corren con `PUID=1000`, `PGID=1000` (usuario `chae`), `TZ=America/Argentin
 | Servicio | Puerto | URL | Imagen |
 |----------|--------|-----|--------|
 | **WhatsApp Bot** | 3555 | `http://localhost:3555` | `jellyfin-whatsapp-bot:latest` |
-| **Tdarr** | 8265 | `http://192.168.1.100:8265` | `ghcr.io/haveagitgat/tdarr` |
-| **Maintainerr** | 8787 | `http://192.168.1.100:8787` (mapped desde 6246) | `ghcr.io/maintainerr/maintainerr` |
-| **Portainer** | 9443 (SSL) | `https://192.168.1.100:9443` | `portainer/portainer-ce` |
-| **SubgenAI** | 9000 | `http://192.168.1.100:9000` | `mccloud/subgen:cpu` |
-| **PostgreSQL** | 5432 | interno | `postgres:16` |
-| **Nginx Proxy Manager** | 18080/18081/18443 | `http://192.168.1.100:18081` | `jc21/nginx-proxy-manager` |
-| **Watchtower** | - | - | `containrrr/watchtower` |
+| **Tdarr** | 8265 | `http://192.168.0.200:8265` | `ghcr.io/haveagitgat/tdarr` |
+| **Maintainerr** | 8787 | `http://192.168.0.200:8787` (mapped desde 6246) | `ghcr.io/maintainerr/maintainerr` |
+| **Portainer** | 9443 (SSL) | `https://127.0.0.1:9443` (solo loopback, no accesible desde la LAN) | `portainer/portainer-ce` |
+| **SubgenAI** | 9000 | `http://192.168.0.200:9000` | `mccloud/subgen` |
+| **PostgreSQL** | 5432 | `127.0.0.1:5432` (solo loopback) | `postgres:16` |
+| **Recyclarr** | - | interno | `ghcr.io/recyclarr/recyclarr:8` |
+| **qBitManage** | - | interno | `docker.io/bobokun/qbit_manage:latest` |
+| **AdGuard** | 3002 (web), 53 TCP/UDP (DNS) | `http://192.168.0.200:3002` | `adguard/adguardhome` |
+| **Dozzle** | 8081 | `http://192.168.0.200:8081` | `amir20/dozzle:latest` |
+| **Homepage** | 3003 | `http://192.168.0.200:3003` | `ghcr.io/gethomepage/homepage` |
+| **Scrutiny** | 8082 | `http://192.168.0.200:8082` | `ghcr.io/analogj/scrutiny:latest-omnibus` |
 
 ### Red Docker
 
@@ -96,7 +134,7 @@ jellyfin_default:     jellyfin, uptime-kuma
 
 ## Túnel Cloudflare
 
-El servidor es accesible desde internet mediante **Cloudflare Tunnel** (sin exponer puertos).
+El servidor es accesible desde internet mediante **Cloudflare Tunnel**, que es el camino de entrada de las UIs administrativas sin exponerlas directamente a Internet. Queda salvo `6881` de qBittorrent, que escucha en todas las interfaces a propósito para aceptar peers entrantes y cuya exposición real depende del firewall del host y del NAT del router.
 
 ```bash
 systemctl status cloudflared
@@ -147,14 +185,14 @@ Bot personal para administrar el media stack desde WhatsApp. Usa `@whiskeysocket
 | `/reiniciar` | **(admin)** Reinicia el bot |
 | `/reconectar` | **(admin)** Reconecta WhatsApp Web |
 | `/limpiartorrents` | **(admin)** Limpia torrents completados de qBittorrent |
-| `/registraradmin` | Registra al usuario como admin (código: `0420`) |
+| `/registraradmin` | Registra al usuario como admin (código configurado localmente) |
 | `/cancelar` | Cancela el flujo actual |
 | `/repetir` | Repite la página actual de resultados |
 | `/mas` | Siguiente página de resultados |
 
 ### Admin Verification
 
-Para usar comandos admin, enviar `/registraradmin` una vez desde el número del dueño.
+Para usar comandos admin, enviar `/registraradmin` una vez desde el número del dueño. El código de registro se configura localmente en el bot.
 
 ### Webhook Endpoints
 
@@ -252,6 +290,7 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 | Cada | Comando | Descripción |
 |------|---------|-------------|
 | 2 minutos | `/home/chae/stack/scripts/media-mount-recovery.sh` | Verifica montura de `/mnt/media`, reinicia servicios si se recuperó |
+| 2 minutos | `media-pool-watchdog.timer` | Remonta ramas caídas y el pool (systemd, root) |
 | 5 minutos | `/home/chae/stack/scripts/generate-stack-dashboard-data.sh` | Genera cache JSON para dashboard |
 | 10 minutos | `python3 /home/chae/stack/services/bazarr/auto_translate.py` | Traduce subs EN bjados por Bazarr vía Gemini |
 | 6 horas | `python3 /home/chae/stack/scripts/check_es_subs.py` | Verifica y descarga subtítulos ES faltantes |
@@ -302,21 +341,26 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 
 ## URLs de Acceso
 
+> Las URLs usan la **IP LAN configurada actualmente** (`192.168.0.200`), no una IP estática garantizada. Si el router entrega esa dirección por DHCP, conviene fijar una reserva antes de depender de estas URLs.
+
 | Servicio | URL Local |
 |----------|-----------|
-| Jellyfin | `http://192.168.1.100:8096` |
-| Radarr | `http://192.168.1.100:7878` |
-| Sonarr | `http://192.168.1.100:8989` |
-| Bazarr | `http://192.168.1.100:6767` |
-| Prowlarr | `http://192.168.1.100:9696` |
-| qBittorrent | `http://192.168.1.100:8080` |
-| Jellyseerr | `http://192.168.1.100:5055` |
-| Uptime Kuma | `http://192.168.1.100:3001` |
-| Tdarr | `http://192.168.1.100:8265` |
-| Maintainerr | `http://192.168.1.100:8787` |
-| Portainer | `https://192.168.1.100:9443` |
-| SubgenAI | `http://192.168.1.100:9000` |
-| NPM Admin | `http://192.168.1.100:18081` |
+| Jellyfin | `http://192.168.0.200:8096` |
+| Radarr | `http://192.168.0.200:7878` |
+| Sonarr | `http://192.168.0.200:8989` |
+| Bazarr | `http://192.168.0.200:6767` |
+| Prowlarr | `http://192.168.0.200:9696` |
+| qBittorrent | `http://192.168.0.200:8080` |
+| Jellyseerr | `http://192.168.0.200:5055` |
+| Uptime Kuma | `http://192.168.0.200:3001` |
+| Tdarr | `http://192.168.0.200:8265` |
+| Maintainerr | `http://192.168.0.200:8787` |
+| Portainer | `https://127.0.0.1:9443` (solo loopback) |
+| SubgenAI | `http://192.168.0.200:9000` |
+| AdGuard | `http://192.168.0.200:3002` |
+| Dozzle | `http://192.168.0.200:8081` |
+| Homepage | `http://192.168.0.200:3003` |
+| Scrutiny | `http://192.168.0.200:8082` |
 | Bot API | `http://localhost:3555` |
 
 ---
@@ -341,25 +385,27 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 | Puerto | Servicio | Container |
 |--------|----------|-----------|
 | 3001 | Uptime Kuma | chae-uptime-kuma |
+| 53 TCP/UDP | AdGuard (DNS) | chae-adguard |
+| 3002 | AdGuard WebUI | chae-adguard |
+| 3003 | Homepage | chae-homepage |
 | 3555 | WhatsApp Bot | jellyfin-whatsapp-bot |
 | 5055 | Jellyseerr | chae-jellyseerr |
-| 5432 | PostgreSQL | chae-postgres |
+| 5432 | PostgreSQL — solo loopback | chae-postgres |
 | 6767 | Bazarr | chae-bazarr |
 | 6881 TCP/UDP | qBittorrent (torrents) | chae-qbittorrent |
 | 7878 | Radarr | chae-radarr |
 | 8080 | qBittorrent WebUI | chae-qbittorrent |
+| 8081 | Dozzle | chae-dozzle |
+| 8082 | Scrutiny | chae-scrutiny |
 | 8096 | Jellyfin HTTP | chae-jellyfin |
 | 8191 | Flaresolverr | chae-flaresolverr |
 | 8265 | Tdarr WebUI | chae-tdarr |
 | 8787 | Maintainerr | chae-maintainerr |
-| 8920 | Jellyfin HTTPS | chae-jellyfin |
+| 8920 | Jellyfin HTTPS — declarado en el compose, **no publicado** | chae-jellyfin |
 | 8989 | Sonarr | chae-sonarr |
 | 9000 | SubgenAI | subgenai |
-| 9443 | Portainer SSL | portainer |
+| 9443 | Portainer SSL — solo loopback | portainer |
 | 9696 | Prowlarr | chae-prowlarr |
-| 18080 | NPM HTTP | nginx-proxy-manager |
-| 18081 | NPM Admin | nginx-proxy-manager |
-| 18443 | NPM HTTPS | nginx-proxy-manager |
 
 ---
 
@@ -379,10 +425,10 @@ Los backups corren cada día a las 3am vía `/home/chae/stack/scripts/backup-sta
 
 ## Docker: Hardening
 
-- Imágenes pineadas por digest (`repo@sha256:...`) en todos los compose; recrear no cambia versión
+- Imágenes pineadas por digest (`repo@sha256:...`) en los compose de servicios; recrear no cambia versión. Excepción: `jellyfin-whatsapp-bot` se construye localmente desde su `Dockerfile` y usa el tag mutable `:latest`
 - Healthchecks propios en arrs (`/ping`), Jellyfin (`/health`), Jellyseerr, AdGuard, Postgres (`pg_isready`), Maintainerr
-- Límites de memoria: tdarr-node 8g, tdarr 2g, subgenai 4g
-- Postgres: credenciales en `services/postgres/.env` (nunca en el compose); puerto solo en localhost
+- Límites de memoria: tdarr-node 8g, tdarr 2g, subgenai 8g
+- Postgres: hoy NO hay `services/postgres/.env`; la contraseña vive como valor literal en `services/postgres/docker-compose.override.yml` (el compose principal no la trae). Puerto 5432 publicado solo en loopback. Pendiente: mover la credencial a un `.env` y dejarla referenciada
 - Maintainerr y Portainer tienen compose propio bajo `services/` (antes eran contenedores sueltos irreproducibles)
 - Sin contenedores huérfanos (watchtower y `-pre-*` eliminados)
 
@@ -396,9 +442,9 @@ Los backups corren cada día a las 3am vía `/home/chae/stack/scripts/backup-sta
 ## Notas de Seguridad
 
 - Los archivos `.env` tienen permisos `600` (solo el dueño puede leerlos)
-- El túnel Cloudflare no expone puertos directamente
+- Las UIs administrativas no están publicadas directamente a internet: el túnel Cloudflare es su camino de entrada. Excepción: `6881` de qBittorrent, cuya exposición depende del firewall y del NAT
 - Webhooks de Radarr/Sonarr requieren token secreto
-- Comandos admin requieren verificación via `/registraradmin` (código: `0420`)
+- Comandos admin requieren verificación via `/registraradmin` (código configurado localmente)
 - WhatsApp bot solo responde a mensajes del número del dueño
 - Scripts que envían notificaciones requieren `x-update-token`
 - Las contraseñas y API keys están distribuidas en archivos `.env` — nunca committeadas a git
