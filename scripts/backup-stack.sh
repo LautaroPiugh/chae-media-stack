@@ -71,8 +71,18 @@ cleanup() {
   if [[ -n "$TMP_DUMP" && -f "$TMP_DUMP" ]]; then
     rm -f -- "$TMP_DUMP"
   fi
-  if [[ -n "$JELLYFIN_DB_SNAPSHOT" && -f "$JELLYFIN_DB_SNAPSHOT" ]]; then
-    rm -f -- "$JELLYFIN_DB_SNAPSHOT"
+  # El snapshot de Jellyfin se crea dentro de BACKUP_DIR/database, y SQLite
+  # escribe a su lado los sidecars -wal y -shm. cleanup solo borra el .db, asi
+  # que los otros dos quedaban huerfanos en el directorio de backups, uno de
+  # cada por corrida, y la retencion (*.gz -mtime +N) no los toca porque no son
+  # .gz. Se borran por ruta exacta del snapshot, nunca por glob: los backups
+  # publicados (jellyfin-*.db.gz) quedan intactos.
+  if [[ -n "$JELLYFIN_DB_SNAPSHOT" ]]; then
+    rm -f -- \
+      "$JELLYFIN_DB_SNAPSHOT" \
+      "$JELLYFIN_DB_SNAPSHOT-wal" \
+      "$JELLYFIN_DB_SNAPSHOT-shm" \
+      "$JELLYFIN_DB_SNAPSHOT-journal"
   fi
   if [[ -n "$TMP_JELLYFIN_GZIP" && -f "$TMP_JELLYFIN_GZIP" ]]; then
     rm -f -- "$TMP_JELLYFIN_GZIP"
@@ -308,7 +318,11 @@ gzip -c "$JELLYFIN_DB_SNAPSHOT" > "$TMP_JELLYFIN_GZIP"
 gzip -t "$TMP_JELLYFIN_GZIP" || die "el backup SQLite de Jellyfin no supera gzip -t"
 mv -- "$TMP_JELLYFIN_GZIP" "$JELLYFIN_DB_BACKUP"
 TMP_JELLYFIN_GZIP=''
-rm -f -- "$JELLYFIN_DB_SNAPSHOT"
+rm -f -- \
+  "$JELLYFIN_DB_SNAPSHOT" \
+  "$JELLYFIN_DB_SNAPSHOT-wal" \
+  "$JELLYFIN_DB_SNAPSHOT-shm" \
+  "$JELLYFIN_DB_SNAPSHOT-journal"
 JELLYFIN_DB_SNAPSHOT=''
 log "Snapshot SQLite de Jellyfin verificado: $JELLYFIN_DB_BACKUP"
 
