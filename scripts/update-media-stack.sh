@@ -50,12 +50,6 @@ declare -Ar UPDATE_SERVICES=(
   [subgen]='subgenai'
   [jellyseerr]='jellyseerr'
   [tdarr]='tdarr tdarr-node'
-  [homepage]='homepage'
-  [maintainerr]='maintainerr'
-  [dozzle]='dozzle'
-  [scrutiny]='scrutiny'
-  [qbitmanage]='qbitmanage'
-  [recyclarr]='recyclarr'
 )
 
 declare -Ar BACKUP_KEYS=(
@@ -80,10 +74,6 @@ declare -Ar READY_URLS=(
   [subgen]='http://127.0.0.1:9000/'
   [jellyseerr]='http://127.0.0.1:5055/'
   [tdarr]='http://127.0.0.1:8265/'
-  [homepage]='http://127.0.0.1:3003/'
-  [maintainerr]='http://127.0.0.1:8787/'
-  [dozzle]='http://127.0.0.1:8081/'
-  [scrutiny]='http://127.0.0.1:8082/'
 )
 
 declare -Ar READY_TIMEOUTS=(
@@ -96,10 +86,6 @@ declare -Ar READY_TIMEOUTS=(
   [subgen]=180
   [jellyseerr]=240
   [tdarr]=300
-  [homepage]=120
-  [maintainerr]=180
-  [dozzle]=120
-  [scrutiny]=180
 )
 
 DENYLIST=(

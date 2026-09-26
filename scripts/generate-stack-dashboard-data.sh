@@ -370,5 +370,8 @@ jq -n \
     ]
   }' > "$TMP_FILE"
 
-mv "$TMP_FILE" "$OUTPUT_FILE"
-chmod 644 "$OUTPUT_FILE"
+  mv "$TMP_FILE" "$OUTPUT_FILE"
+  # 600 y no 644: el JSON incluye colas de Radarr/Sonarr con nombres de
+  # PELICULAS/SERIES. Verificado: no persiste API keys, pero el contenido
+  # igual es privado. El directorio ya es 755, así que solo el archivo.
+  chmod 600 "$OUTPUT_FILE"
