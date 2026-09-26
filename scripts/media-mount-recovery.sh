@@ -1,15 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-MEDIA1_PATH="${MEDIA1_PATH:-/mnt/media1}"
-MEDIA2_PATH="${MEDIA2_PATH:-/mnt/media2}"
 MEDIA_POOL_PATH="${MEDIA_POOL_PATH:-/mnt/media}"
-MEDIA1_UUID="${MEDIA1_UUID:-E41C8ED01C8E9CE4}"
-MEDIA2_UUID="${MEDIA2_UUID:-3FD22A422077368D}"
-MEDIA3_PATH="${MEDIA3_PATH:-/mnt/media3}"
-MEDIA3_UUID="${MEDIA3_UUID:-f5b48469-5ece-4e75-a90d-7ff6a93c4dfe}"
-MEDIA4_PATH="${MEDIA4_PATH:-/mnt/media4}"
-MEDIA4_UUID="${MEDIA4_UUID:-a4325f7b-fd22-4a64-8f1e-fd90483740c5}"
+CONFIG_FILE="${MEDIA_BRANCHES_CONFIG:-/home/chae/stack/.media-branches.conf}"
 DRY_RUN="${DRY_RUN:-0}"
 STOP_ON_FAILURE="${STOP_ON_FAILURE:-1}"
 STOP_TIMEOUT="${STOP_TIMEOUT:-30}"
@@ -23,6 +16,9 @@ LAST_ATTEMPT_FILE="$STATE_DIR/last-recovery-attempt"
 LOG_FILE="${MEDIA_RECOVERY_LOG_FILE:-$STATE_DIR/recovery.log}"
 LOCK_FILE="${MEDIA_MOUNT_LOCK_FILE:-$STATE_DIR/mount-operations.lock}"
 HEALTH_REASON='not checked'
+BRANCH_PATHS=()
+BRANCH_UUIDS=()
+EXPECTED_BRANCHES=''
 
 umask 077
 if [[ "$EUID" -eq 0 ]]; then
@@ -53,6 +49,36 @@ write_atomic() {
   temporary="$(mktemp "$STATE_DIR/.state.XXXXXX")"
   printf '%s\n' "$value" > "$temporary"
   mv -- "$temporary" "$destination"
+}
+
+config_get() {
+  local key="$1"
+  [[ -f "$CONFIG_FILE" ]] || return 1
+  awk -F= -v k="$key" '$1==k {print substr($0, index($0,"=")+1); exit}' "$CONFIG_FILE"
+}
+
+load_media_config() {
+  local branches_raw uuids_raw
+
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    printf 'ERROR: falta %s (generar con: sudo bash /home/chae/stack/fix-media-mounts.sh)\n' "$CONFIG_FILE" >&2
+    return 1
+  fi
+  branches_raw="$(config_get MEDIA_BRANCHES || true)"
+  uuids_raw="$(config_get MEDIA_UUIDS || true)"
+  if [[ -z "$branches_raw" || -z "$uuids_raw" ]]; then
+    printf 'ERROR: %s sin MEDIA_BRANCHES/MEDIA_UUIDS\n' "$CONFIG_FILE" >&2
+    return 1
+  fi
+  IFS=':' read -ra BRANCH_PATHS <<< "$branches_raw"
+  IFS=':' read -ra BRANCH_UUIDS <<< "$uuids_raw"
+  if [[ "${#BRANCH_PATHS[@]}" -eq 0 || "${#BRANCH_PATHS[@]}" -ne "${#BRANCH_UUIDS[@]}" ]]; then
+    printf 'ERROR: %s ramas y UUIDs no coinciden (%d vs %d)\n' \
+      "$CONFIG_FILE" "${#BRANCH_PATHS[@]}" "${#BRANCH_UUIDS[@]}" >&2
+    return 1
+  fi
+  EXPECTED_BRANCHES="$branches_raw"
+  return 0
 }
 
 is_rw_mount() {
@@ -87,12 +113,12 @@ media_is_healthy() {
   local fs_type
   local pool_process_found=0
   local required
+  local i
   local -a arguments=()
 
-  branch_is_healthy "$MEDIA1_PATH" "$MEDIA1_UUID" || return 1
-  branch_is_healthy "$MEDIA2_PATH" "$MEDIA2_UUID" || return 1
-  branch_is_healthy "$MEDIA3_PATH" "$MEDIA3_UUID" || return 1
-  branch_is_healthy "$MEDIA4_PATH" "$MEDIA4_UUID" || return 1
+  for i in "${!BRANCH_PATHS[@]}"; do
+    branch_is_healthy "${BRANCH_PATHS[$i]}" "${BRANCH_UUIDS[$i]}" || return 1
+  done
   [[ -d "$MEDIA_POOL_PATH" ]] || { HEALTH_REASON="$MEDIA_POOL_PATH no existe"; return 1; }
   mountpoint -q "$MEDIA_POOL_PATH" || { HEALTH_REASON="$MEDIA_POOL_PATH no esta montado"; return 1; }
   fs_type="$(findmnt -rn -o FSTYPE --target "$MEDIA_POOL_PATH" 2>/dev/null || true)"
@@ -109,7 +135,7 @@ media_is_healthy() {
     branches_found=0
     mountpoint_found=0
     for argument in "${arguments[@]:1}"; do
-      [[ "$argument" == "$MEDIA1_PATH:$MEDIA2_PATH:$MEDIA3_PATH:$MEDIA4_PATH" ]] && branches_found=1
+      [[ "$argument" == "$EXPECTED_BRANCHES" ]] && branches_found=1
       [[ "$argument" == "$MEDIA_POOL_PATH" ]] && mountpoint_found=1
     done
     if [[ "$branches_found" -eq 1 && "$mountpoint_found" -eq 1 ]]; then
@@ -118,7 +144,7 @@ media_is_healthy() {
     fi
   done
   [[ "$pool_process_found" -eq 1 ]] || {
-    HEALTH_REASON="$MEDIA_POOL_PATH no usa las ramas esperadas $MEDIA1_PATH:$MEDIA2_PATH:$MEDIA3_PATH:$MEDIA4_PATH"
+    HEALTH_REASON="$MEDIA_POOL_PATH no usa las ramas esperadas $EXPECTED_BRANCHES"
     return 1
   }
   is_rw_mount "$MEDIA_POOL_PATH" || { HEALTH_REASON="$MEDIA_POOL_PATH no esta montado rw"; return 1; }
@@ -139,6 +165,8 @@ get_running_media_consumers() {
   local mounts
   local name
   local source
+  local branch
+  local matched
   local -A seen=()
 
   result=()
@@ -153,11 +181,19 @@ get_running_media_consumers() {
     mounts="$(docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' "$container_id")" || return 1
 
     while IFS= read -r source; do
-      if [[ "$source" == "$MEDIA_POOL_PATH" || "$source" == "$MEDIA_POOL_PATH/"* \
-        || "$source" == "$MEDIA1_PATH" || "$source" == "$MEDIA1_PATH/"* \
-        || "$source" == "$MEDIA2_PATH" || "$source" == "$MEDIA2_PATH/"* \
-        || "$source" == "$MEDIA3_PATH" || "$source" == "$MEDIA3_PATH/"* \
-        || "$source" == "$MEDIA4_PATH" || "$source" == "$MEDIA4_PATH/"* ]]; then
+      [[ -n "$source" ]] || continue
+      matched=0
+      if [[ "$source" == "$MEDIA_POOL_PATH" || "$source" == "$MEDIA_POOL_PATH/"* ]]; then
+        matched=1
+      else
+        for branch in "${BRANCH_PATHS[@]}"; do
+          if [[ "$source" == "$branch" || "$source" == "$branch/"* ]]; then
+            matched=1
+            break
+          fi
+        done
+      fi
+      if [[ "$matched" -eq 1 ]]; then
         if [[ -z "${seen[$name]:-}" ]]; then
           result+=("$name")
           seen["$name"]=1
@@ -386,9 +422,11 @@ recover_stopped_containers() {
 [[ "$START_TIMEOUT" =~ ^[0-9]+$ ]] || { printf 'START_TIMEOUT debe ser un entero\n' >&2; exit 2; }
 [[ "$RECOVERY_RETRY_SECONDS" =~ ^[0-9]+$ ]] || { printf 'RECOVERY_RETRY_SECONDS debe ser un entero\n' >&2; exit 2; }
 
-for command in findmnt mountpoint mktemp mv flock docker; do
+for command in findmnt mountpoint mktemp mv flock docker awk; do
   command -v "$command" >/dev/null 2>&1 || { log "ERROR: comando requerido no encontrado: $command"; exit 2; }
 done
+
+load_media_config || exit 2
 
 if [[ "$DRY_RUN" != '1' ]]; then
   exec 9>"$LOCK_FILE"
