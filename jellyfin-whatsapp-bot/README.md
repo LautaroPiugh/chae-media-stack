@@ -218,6 +218,8 @@ curl -X POST http://localhost:3555/webhook/radarr \
 
 Enviá `/registraradmin` una vez desde el número del dueño para habilitar los comandos de admin. La verificación persiste entre reinicios del bot.
 
+El comando requiere que `ADMIN_REGISTER_CODE` esté definida en `jellyfin-whatsapp-bot/.env`, que el compose carga mediante `env_file` (`NODE_ENV` es un valor adicional del compose, no el canal principal). Si la variable no está definida, el registro de admin queda deshabilitado y el bot informa que no está configurado, en lugar de comparar el código.
+
 ## Estructura del Proyecto
 
 ```
