@@ -55,6 +55,7 @@
 
 # Cache files
 omdb_cache.json
+os_quota.json
 
 # Logs
 *.log
