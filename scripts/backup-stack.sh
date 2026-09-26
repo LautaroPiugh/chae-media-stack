@@ -326,8 +326,11 @@ CONFIG_DIRS=(
   "homepage:$PROJECT_DIR/services/homepage"
   "qbitmanage:$PROJECT_DIR/services/qbitmanage"
   "recyclarr:$PROJECT_DIR/services/recyclarr"
-  "scrutiny:$PROJECT_DIR/services/scrutiny"
-)
+    "scrutiny:$PROJECT_DIR/services/scrutiny"
+    "adguard:$PROJECT_DIR/services/adguard"
+    "subgen:$PROJECT_DIR/services/subgen"
+    "bot-auth:$PROJECT_DIR/jellyfin-whatsapp-bot/auth"
+  )
 
 tar_archive() {
   # tar de config viva: los -wal/-shm cambian constantemente; se excluyen y
@@ -335,12 +338,14 @@ tar_archive() {
   local archive="$1"
   shift
   local rc=0
-  tar czf "$archive" \
-    --exclude='*/config/*.db-wal' \
-    --exclude='*/config/*.db-shm' \
-    --exclude='*/influxdb/*' \
-    --warning=no-file-changed \
-    "$@" || rc=$?
+    tar czf "$archive" \
+      --exclude='*/config/*.db-wal' \
+      --exclude='*/config/*.db-shm' \
+      --exclude='*/influxdb/*' \
+      --exclude='*/models/*' \
+      --ignore-failed-read \
+      --warning=no-file-changed \
+      "$@" || rc=$?
   if [[ $rc -gt 1 ]]; then
     die "tar fallo con codigo $rc para $archive"
   elif [[ $rc -eq 1 ]]; then
