@@ -10,6 +10,7 @@ START_TIMEOUT="${START_TIMEOUT:-30}"
 RECOVERY_RETRY_SECONDS="${RECOVERY_RETRY_SECONDS:-300}"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 STATE_DIR="${MEDIA_MOUNT_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/media-mount-recovery}"
+FSTAB="${MEDIA_FSTAB:-/etc/fstab}"
 STATE_FILE="$STATE_DIR/last_state"
 STOPPED_FILE="$STATE_DIR/stopped-containers"
 LAST_ATTEMPT_FILE="$STATE_DIR/last-recovery-attempt"
@@ -57,26 +58,123 @@ config_get() {
   awk -F= -v k="$key" '$1==k {print substr($0, index($0,"=")+1); exit}' "$CONFIG_FILE"
 }
 
+# Inventario persistente esperado: qué dice /etc/fstab.
+#
+# Es la referencia dura porque fstab y .media-branches.conf los regenera juntos
+# el mismo script (fix-media-mounts.sh / add-media-disk.sh). Si discrepan,
+# la config esta corrupta.
+#
+# NO se valida acá que el dispositivo exista: que el disco este fisicamente
+# ausente es degradacion operativa, y la detecta branch_is_healthy. Acá solo
+# se valida coherencia estructural.
+declare -A FSTAB_BRANCH_UUID=()
+
+load_fstab_inventory() {
+  local uuid target
+  # declare -gA y no solo declare -A arriba: si un caller asigno la variable
+  # como array indexada, ${arr[/mnt/media1]} explota con "arithmetic syntax
+  # error". Redeclararla aqui la hace autonoma de quien la invoque.
+  declare -gA FSTAB_BRANCH_UUID=()
+  if [[ ! -r "$FSTAB" ]]; then
+    log "ERROR: no se puede leer $FSTAB — no puedo validar la configuracion"
+    return 1
+  fi
+  # "|| [[ -n ${uuid:-} ]]" para no perder la ultima linea si el archivo no
+  # termina en newline: sin eso la ultima rama se cae del inventario y el
+  # cruce con la conf falla con un error que no dice la causa real.
+  while read -r uuid target _ || [[ -n "${uuid:-}" ]]; do
+    [[ "$uuid" == UUID=* ]] || continue
+    [[ "$target" =~ ^/mnt/media[0-9]+$ ]] || continue
+    uuid="${uuid#UUID=}"
+    if [[ -n "${FSTAB_BRANCH_UUID[$target]:-}" ]]; then
+      log "ERROR: $FSTAB declara $target dos veces (${FSTAB_BRANCH_UUID[$target]} y $uuid)"
+      return 1
+    fi
+    FSTAB_BRANCH_UUID["$target"]="$uuid"
+  done < "$FSTAB"
+  if [[ "${#FSTAB_BRANCH_UUID[@]}" -eq 0 ]]; then
+    log "ERROR: $FSTAB no declara ninguna rama /mnt/mediaN"
+    return 1
+  fi
+}
+
+# Valida la forma de las listas y su correspondencia con fstab.
+# Cualquier contradicción estructural es config inválida: ERROR persistido y
+# return 1, para que main haga exit 2 sin tocar un contenedor.
 load_media_config() {
   local branches_raw uuids_raw
+  local i path uuid
+  local -A seen_paths=()
+  local -A seen_uuids=()
 
   if [[ ! -f "$CONFIG_FILE" ]]; then
-    printf 'ERROR: falta %s (generar con: sudo bash /home/chae/stack/fix-media-mounts.sh)\n' "$CONFIG_FILE" >&2
+    log "ERROR: falta $CONFIG_FILE (generar con: sudo bash /home/chae/stack/fix-media-mounts.sh)"
     return 1
   fi
   branches_raw="$(config_get MEDIA_BRANCHES || true)"
   uuids_raw="$(config_get MEDIA_UUIDS || true)"
   if [[ -z "$branches_raw" || -z "$uuids_raw" ]]; then
-    printf 'ERROR: %s sin MEDIA_BRANCHES/MEDIA_UUIDS\n' "$CONFIG_FILE" >&2
+    log "ERROR: $CONFIG_FILE sin MEDIA_BRANCHES/MEDIA_UUIDS"
     return 1
   fi
   IFS=':' read -ra BRANCH_PATHS <<< "$branches_raw"
   IFS=':' read -ra BRANCH_UUIDS <<< "$uuids_raw"
-  if [[ "${#BRANCH_PATHS[@]}" -eq 0 || "${#BRANCH_PATHS[@]}" -ne "${#BRANCH_UUIDS[@]}" ]]; then
-    printf 'ERROR: %s ramas y UUIDs no coinciden (%d vs %d)\n' \
-      "$CONFIG_FILE" "${#BRANCH_PATHS[@]}" "${#BRANCH_UUIDS[@]}" >&2
+
+  if [[ "${#BRANCH_PATHS[@]}" -eq 0 || "${#BRANCH_UUIDS[@]}" -eq 0 ]]; then
+    log "ERROR: $CONFIG_FILE declara una lista vacia (paths=${#BRANCH_PATHS[@]} uuids=${#BRANCH_UUIDS[@]})"
     return 1
   fi
+  if [[ "${#BRANCH_PATHS[@]}" -ne "${#BRANCH_UUIDS[@]}" ]]; then
+    log "ERROR: $CONFIG_FILE rutas y UUIDs no coinciden (${#BRANCH_PATHS[@]} vs ${#BRANCH_UUIDS[@]})"
+    return 1
+  fi
+
+  load_fstab_inventory || return 1
+
+  for i in "${!BRANCH_PATHS[@]}"; do
+    path="${BRANCH_PATHS[$i]}"
+    uuid="${BRANCH_UUIDS[$i]}"
+
+    # namespace esperado
+    if [[ ! "$path" =~ ^/mnt/media[0-9]+$ ]]; then
+      log "ERROR: $CONFIG_FILE declara una ruta fuera del namespace esperado: $path"
+      return 1
+    fi
+    # forma de UUID
+    if [[ ! "$uuid" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+      log "ERROR: $CONFIG_FILE declara un UUID con formato invalido para $path: $uuid"
+      return 1
+    fi
+    # duplicados
+    if [[ -n "${seen_paths[$path]:-}" ]]; then
+      log "ERROR: $CONFIG_FILE repite la ruta $path"
+      return 1
+    fi
+    seen_paths["$path"]=1
+    if [[ -n "${seen_uuids[$uuid]:-}" ]]; then
+      log "ERROR: $CONFIG_FILE repite el UUID $uuid (en $path y ${seen_uuids[$uuid]})"
+      return 1
+    fi
+    seen_uuids["$uuid"]="$path"
+    # correspondencia con el inventario persistente
+    if [[ -z "${FSTAB_BRANCH_UUID[$path]:-}" ]]; then
+      log "ERROR: $CONFIG_FILE declara $path pero $FSTAB no lo monta"
+      return 1
+    fi
+    if [[ "${FSTAB_BRANCH_UUID[$path]}" != "$uuid" ]]; then
+      log "ERROR: $path declara UUID=$uuid en $CONFIG_FILE pero $FSTAB dice ${FSTAB_BRANCH_UUID[$path]}"
+      return 1
+    fi
+  done
+
+  # al revés: toda rama de fstab tiene que estar declarada en la config
+  for path in "${!FSTAB_BRANCH_UUID[@]}"; do
+    if [[ -z "${seen_paths[$path]:-}" ]]; then
+      log "ERROR: $FSTAB monta $path pero $CONFIG_FILE no la declara"
+      return 1
+    fi
+  done
+
   EXPECTED_BRANCHES="$branches_raw"
   return 0
 }
