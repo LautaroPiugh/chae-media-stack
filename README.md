@@ -348,9 +348,16 @@ Los servicios se comunican por nombre de contenedor como DNS (ej: `http://radarr
 
 ## Seguridad
 
-- Sin puertos abiertos al exterior — Cloudflare Tunnel único punto de entrada
-  - Puertos locales publicados solo en la IP LAN + loopback. Excepción:
-    qBittorrent expone `6881` TCP/UDP en todas las interfaces
+  - Sin UIs administrativas expuestas directamente desde internet: el
+    Cloudflare Tunnel es el único camino de entrada externo
+    - Dentro de la LAN, 15 UIs quedan publicadas en la IP del server
+      (Jellyfin, Radarr, Sonarr, Prowlarr, Bazarr, Jellyseerr, qBittorrent,
+      AdGuard, Scrutiny, Maintainerr, Homepage, Dozzle, Tdarr, Uptime Kuma,
+      subgen). Quien esté en la LAN las alcanza directo
+    - qBittorrent expone `6881` TCP/UDP en `0.0.0.0`, o sea en todas las
+      interfaces. Es peer to peer, así que no se puede bindar a la LAN: el
+      acceso desde internet depende del firewall del host, del NAT del
+      router y de la política del tracker
   - El bot solo responde al número del dueño; admin requiere `/registraradmin`
   - Webhooks protegidos con tokens secretos
   - `.env` con permisos `600`, excluidos del repo; API keys nunca commiteadas
