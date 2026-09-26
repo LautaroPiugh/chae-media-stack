@@ -393,10 +393,23 @@ for pair in "${CONFIG_DIRS[@]}"; do
       log "Destino: $archive"
       warn_unreadable "$name" "$src"
       if [[ "$name" == 'jellyfin' ]]; then
+      # La DB va aparte: se saca con snapshot consistente de node:sqlite y se
+      # comprueba con quick_check antes de publicarla (ver dump_sqlite_db).
+      # Los sidecars -wal/-shm los crea el proceso vivo, no el snapshot.
+      #
+      # Rutas derivadas: se regeneran solas en el primer arranque, verificado
+      # con un restore desechable. 1907 MB de los 1935 MB del tar.
+      # NO se excluyen: config/ (XML, database.xml, branding…), data/root
+      # (usuarios, Películas, Series) ni la DB, que va en database/.
       tar_archive "$archive" \
         --exclude='jellyfin/config/data/data/jellyfin.db' \
         --exclude='jellyfin/config/data/data/jellyfin.db-shm' \
         --exclude='jellyfin/config/data/data/jellyfin.db-wal' \
+        --exclude='jellyfin/config/data/data/trickplay' \
+        --exclude='jellyfin/config/data/data/subtitles' \
+        --exclude='jellyfin/config/data/metadata' \
+        --exclude='jellyfin/config/cache' \
+        --exclude='jellyfin/config/log' \
         -C "$(dirname "$src")" "$(basename "$src")"
     else
       tar_archive "$archive" -C "$(dirname "$src")" "$(basename "$src")"
