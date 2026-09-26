@@ -18,3 +18,12 @@ networks:
   jellyfin:
     external: true
     name: jellyfin_default
+  # Faltaba: services/postgres/docker-compose.yml la declara external y sin
+  # ella el primer "up" de postgres falla en una maquina limpia.
+  postgres_default:
+    external: true
+
+volumes:
+  # Faltaba: services/portainer/docker-compose.yml la declara external.
+  portainer_data:
+    external: true

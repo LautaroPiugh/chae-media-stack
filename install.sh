@@ -168,10 +168,10 @@ endstep
 # ══════════════════════════ 2 · PREGUNTAS ══════════════════════════
 step "2/${STEP_TOTAL} · Tu configuración"
 
-ask "IP LAN del server" "${AUTO_IP:-192.168.1.100}";          MEDIA_SERVER_IP="$REPLY"
+ask "IP LAN del server" "${AUTO_IP:-192.168.0.200}";          MEDIA_SERVER_IP="$REPLY"
 ask "Zona horaria" "$AUTO_TZ";                                CFG_TZ="$REPLY"
-ask "Carpeta de biblioteca (MEDIA_ROOT)" "/opt/media";        MEDIA_ROOT="${REPLY%/}"
-ask "Carpeta de descargas (DOWNLOADS_ROOT)" "/opt/downloads"; DOWNLOADS_ROOT="${REPLY%/}"
+ask "Carpeta de biblioteca (MEDIA_ROOT)" "/mnt/media";        MEDIA_ROOT="${REPLY%/}"
+ask "Carpeta de descargas (DOWNLOADS_ROOT)" "/mnt/media2/downloads"; DOWNLOADS_ROOT="${REPLY%/}"
 ask "PUID (dueño de archivos)" "1000";                        PUID="$REPLY"
 ask "PGID" "1000";                                            PGID="$REPLY"
 
@@ -261,7 +261,55 @@ endstep
 ORDER=(postgres qbittorrent prowlarr radarr sonarr bazarr jellyfin uptime-kuma adguard flaresolverr maintainerr subgen tdarr portainer homepage whatsapp-bot)
 step "5/${STEP_TOTAL} · Desplegar contenedores"
 
+# Redes y volumenes external.
+# Cada compose declara sus redes como external: true, o sea que Docker no las
+# crea, y el primer "up" falla en una maquina nueva con
+# "network qbittorrent_default was found but has incorrect label".
+# Ningun script del repo las creaba: solo estaba en README.md e INSTALL.md, y
+# INSTALL.md se olvidaba de prowlarr_default. Aca se crean, y es idempotente.
 FAILS=()
+EXTERNAL_NETWORKS=(qbittorrent_default jellyfin_default prowlarr_default postgres_default)
+EXTERNAL_VOLUMES=(portainer_data)
+
+ensure_external() {
+  local kind="$1" name
+  for name in "${@:2}"; do
+    if [ "$DRY_RUN" = 1 ]; then
+      if [ "$kind" = network ]; then
+        docker network inspect "$name" >/dev/null 2>&1 \
+          && echo "${FB}┃${R}  ${DIM}[dry-run] red $name ya existe${R}" \
+          || echo "${FB}┃${R}  ${DIM}[dry-run] crearía red $name${R}"
+      else
+        docker volume inspect "$name" >/dev/null 2>&1 \
+          && echo "${FB}┃${R}  ${DIM}[dry-run] volumen $name ya existe${R}" \
+          || echo "${FB}┃${R}  ${DIM}[dry-run] crearía volumen $name${R}"
+      fi
+      continue
+    fi
+    if [ "$kind" = network ]; then
+      if docker network inspect "$name" >/dev/null 2>&1; then
+        ok "red $name ya existe"
+      elif docker network create "$name" >/dev/null; then
+        ok "red $name creada"
+      else
+        failx "no pude crear la red $name"; FAILS+=("net:$name")
+      fi
+    else
+      if docker volume inspect "$name" >/dev/null 2>&1; then
+        ok "volumen $name ya existe"
+      elif docker volume create "$name" >/dev/null; then
+        ok "volumen $name creado"
+      else
+        failx "no pude crear el volumen $name"; FAILS+=("vol:$name")
+      fi
+    fi
+  done
+}
+
+ensure_external network "${EXTERNAL_NETWORKS[@]}"
+ensure_external volume "${EXTERNAL_VOLUMES[@]}"
+echo
+
 for svc in "${ORDER[@]}"; do
   skip=1; for s in "${SELECTED[@]}"; do [ "$s" = "$svc" ] && skip=0; done
   [ $skip = 1 ] && continue
