@@ -78,7 +78,7 @@ Soporte: [PostgreSQL] · [Uptime Kuma] · [Portainer] · [AdGuard Home] · [Main
 
 ## Servicios
 
-Casi todos los contenedores usan prefijo `chae-*` (ej: `chae-jellyfin`). Las tres excepciones son `subgenai`, `jellyfin-whatsapp-bot` y `portainer`, que usan su nombre de proyecto de Compose. Los puertos están publicados solo en la IP LAN del server y en localhost.
+Casi todos los contenedores usan prefijo `chae-*` (ej: `chae-jellyfin`). Las tres excepciones son `subgenai`, `jellyfin-whatsapp-bot` y `portainer`, que usan su nombre de proyecto de Compose. Casi todos los puertos se publican solo en la IP LAN del server y en localhost. La excepción es qBittorrent, que además expone su puerto BitTorrent `6881` TCP/UDP en todas las interfaces (`0.0.0.0`).
 
 | Servicio | Puerto | Descripción |
 |----------|--------|-------------|
@@ -179,15 +179,19 @@ docker network create prowlarr_default
 docker network create postgres_default
 docker volume create portainer_data
 
-# 2. Configuración central (.env raíz + symlinks por servicio)
+# 2. Configuración central (.env raíz + copias por servicio)
 cat > .env <<'EOF'
 MEDIA_SERVER_IP=192.168.1.100
 TZ=America/Argentina/Buenos_Aires
 PUID=1000
 PGID=1000
 EOF
-chmod 600 .env
-for d in services/*/; do ln -sfn "../../.env" "$d/.env"; done
+  chmod 600 .env
+  # install.sh copia el .env a cada servicio; el manual hace lo mismo.
+  # Con symlinks funcionaría y propagaría un cambio al instante, pero no es
+  # lo que hace la herramienta: una herramienta que escriba in-place sobre
+  # services/<svc>/.env con un symlink escribiría sobre el canónico.
+  for d in services/*/; do install -m 600 .env "$d/.env"; done
 
 # 3. Levantar todo en orden (postgres primero, arr apps después)
 ./scripts/start-stack.sh
@@ -345,11 +349,17 @@ Los servicios se comunican por nombre de contenedor como DNS (ej: `http://radarr
 ## Seguridad
 
 - Sin puertos abiertos al exterior — Cloudflare Tunnel único punto de entrada
-- Puertos locales publicados solo en la IP LAN + loopback
-- El bot solo responde al número del dueño; admin requiere `/registraradmin`
-- Webhooks protegidos con tokens secretos
-- `.env` con permisos `600`, excluidos del repo; API keys nunca commiteadas
-- Servicios corren con `PUID=1000`/`PGID=1000` (no-root)
+  - Puertos locales publicados solo en la IP LAN + loopback. Excepción:
+    qBittorrent expone `6881` TCP/UDP en todas las interfaces
+  - El bot solo responde al número del dueño; admin requiere `/registraradmin`
+  - Webhooks protegidos con tokens secretos
+  - `.env` con permisos `600`, excluidos del repo; API keys nunca commiteadas
+  - Los archivos que crean los servicios quedan en `PUID=1000`/`PGID=1000`.
+    Ojo: eso no significa que el container corra como non-root. El PID 1
+    corre como root en la mayoría; las imágenes de linuxserver bajan el
+    proceso del servicio a `abc` (uid 1000) pero el init sigue siendo root.
+    AdGuard y Scrutiny no reciben PUID/PGID y su servicio corre como root;
+    Scrutiny además es `privileged` con `SYS_RAWIO` y `SYS_ADMIN`
 - 20 de 21 composes pineados por digest. La excepción es
   `jellyfin-whatsapp-bot`, que se construye localmente desde el repo
 - 12 de 22 contenedores tienen healthcheck. Los 10 que no, ver más abajo
