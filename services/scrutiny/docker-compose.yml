@@ -1,6 +1,6 @@
 services:
   scrutiny:
-    image: ghcr.io/analogj/scrutiny:latest-omnibus
+    image: ghcr.io/analogj/scrutiny@sha256:2f3d23edadf6d12f9c26d16808bd8620852a37dd3074e814352a2328d48fccb0
     container_name: chae-scrutiny
     restart: unless-stopped
     privileged: true

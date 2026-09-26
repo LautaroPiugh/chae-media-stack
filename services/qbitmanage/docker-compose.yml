@@ -1,6 +1,6 @@
 services:
   qbitmanage:
-    image: docker.io/bobokun/qbit_manage:latest
+    image: bobokun/qbit_manage@sha256:ea04167f627e506b3691304f4c639a52c05584cc9aea4af7ec87d4ed1299e7f5
     container_name: chae-qbitmanage
     restart: unless-stopped
     environment:
