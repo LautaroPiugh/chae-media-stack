@@ -344,7 +344,7 @@ prowlarr_default    → prowlarr, flaresolverr
 
 Los servicios se comunican por nombre de contenedor como DNS (ej: `http://radarr:7878`).
 
-**Acceso remoto:** ningún puerto expuesto a internet. Un túnel Cloudflare (`cloudflared`, servicio systemd con autoupdates, configurado por dashboard) maneja todo el ingreso.
+**Acceso remoto:** las UIs administrativas no están publicadas directamente a internet; el túnel Cloudflare (`cloudflared`, servicio systemd con autoupdates, configurado por dashboard) es el camino de entrada previsto para ellas. El único puerto que sí escucha en todas las interfaces es `6881` de qBittorrent, cuyo acceso desde internet depende del firewall del host y del NAT del router.
 
 ## Seguridad
 
@@ -354,19 +354,20 @@ Los servicios se comunican por nombre de contenedor como DNS (ej: `http://radarr
       (Jellyfin, Radarr, Sonarr, Prowlarr, Bazarr, Jellyseerr, qBittorrent,
       AdGuard, Scrutiny, Maintainerr, Homepage, Dozzle, Tdarr, Uptime Kuma,
       subgen). Quien esté en la LAN las alcanza directo
-    - qBittorrent expone `6881` TCP/UDP en `0.0.0.0`, o sea en todas las
-      interfaces. Es peer to peer, así que no se puede bindar a la LAN: el
-      acceso desde internet depende del firewall del host, del NAT del
-      router y de la política del tracker
+    - qBittorrent mantiene `6881` TCP/UDP en todas las interfaces a
+      propósito, para aceptar peers entrantes. No es una UI y no está
+      sujeto al modelo de las anteriores: su exposición real depende del
+      firewall del host y del NAT del router
   - El bot solo responde al número del dueño; admin requiere `/registraradmin`
   - Webhooks protegidos con tokens secretos
   - `.env` con permisos `600`, excluidos del repo; API keys nunca commiteadas
-  - Los archivos que crean los servicios quedan en `PUID=1000`/`PGID=1000`.
-    Ojo: eso no significa que el container corra como non-root. El PID 1
-    corre como root en la mayoría; las imágenes de linuxserver bajan el
-    proceso del servicio a `abc` (uid 1000) pero el init sigue siendo root.
-    AdGuard y Scrutiny no reciben PUID/PGID y su servicio corre como root;
-    Scrutiny además es `privileged` con `SYS_RAWIO` y `SYS_ADMIN`
+    - Solo los servicios que soportan `PUID`/`PGID` y las tienen
+      configuradas crean sus archivos como `1000:1000`. AdGuard y Scrutiny
+      son las excepciones: no reciben esas variables y sus procesos
+      corren como root. Scrutiny además es `privileged` con `SYS_RAWIO` y
+      `SYS_ADMIN`. Y en los servicios compatibles, esto tampoco implica
+      non-root: el PID 1 sigue siendo root, las imágenes de linuxserver
+      bajan solo el proceso del servicio a uid 1000
 - 20 de 21 composes pineados por digest. La excepción es
   `jellyfin-whatsapp-bot`, que se construye localmente desde el repo
 - 12 de 22 contenedores tienen healthcheck. Los 10 que no, ver más abajo
