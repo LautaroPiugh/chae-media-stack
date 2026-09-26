@@ -1,0 +1,9 @@
+[Unit]
+Description=Media pool watchdog (remonta ramas caidas y el pool mergerfs)
+After=local-fs.target
+ConditionPathExists=/home/chae/stack/.media-branches.conf
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /home/chae/stack/scripts/media-pool-watchdog.sh
+TimeoutStartSec=120

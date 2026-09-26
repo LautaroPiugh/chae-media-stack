@@ -14,6 +14,10 @@
 !LICENSE
 !.gitignore
 !fix-media-mounts.sh
+!check-restore-sde.sh
+!fix-ttyd-panel.sh
+!rescue-and-format-sdf.sh
+!add-media-disk.sh
 !install.sh
 !bootstrap.sh
 !INSTALL.md

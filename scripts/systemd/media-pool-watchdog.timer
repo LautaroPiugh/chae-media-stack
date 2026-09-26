@@ -1,0 +1,10 @@
+[Unit]
+Description=Corre media-pool-watchdog cada 2 minutos
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target
