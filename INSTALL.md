@@ -124,12 +124,23 @@ pnpm --version
 
 ## 3. Crear Redes Docker
 
-Los servicios necesitan dos redes Docker para comunicarse entre sí:
+Los servicios necesitan cuatro redes Docker para comunicarse entre sí:
 
 ```bash
 docker network create qbittorrent_default
 docker network create jellyfin_default
+docker network create prowlarr_default
+docker network create postgres_default
 ```
+
+Y un volumen externo para Portainer:
+
+```bash
+docker volume create portainer_data
+```
+
+> `install.sh` los crea solo y es idempotente: si ya existen, no hace nada.
+> Esta sección es para la instalación manual.
 
 Verificar:
 
@@ -161,11 +172,18 @@ Cada servicio tiene un archivo `docker-compose.yml`. Algunos requieren editar va
 
 ### Postgres
 
-Editar `services/postgres/docker-compose.yml` y cambiar la contraseña:
+La contraseña va en el override, no en el compose:
+
+```
+services/postgres/docker-compose.override.yml
+```
 
 ```yaml
 POSTGRES_PASSWORD: CHANGEME  # cambiá esto por una contraseña segura
 ```
+
+Ese archivo no está versionado a propósito: es donde viven las credenciales
+de esta máquina, y por eso tampoco entra en los backups del repo.
 
 ### Jellyfin
 
@@ -368,19 +386,19 @@ Agregar estas líneas:
 
 ```cron
 # Verificar montura de /mnt/media cada 2 minutos
-*/2 * * * * /home/$USER/chae-media-stack/scripts/media-mount-recovery.sh
+*/2 * * * * /home/$USER/stack/scripts/media-mount-recovery.sh
 
 # Generar caché del dashboard cada 5 minutos
-*/5 * * * * /home/$USER/chae-media-stack/scripts/generate-stack-dashboard-data.sh
+*/5 * * * * /home/$USER/stack/scripts/generate-stack-dashboard-data.sh
 
 # Traducir subtítulos EN→ES vía Gemini cada 10 minutos
-*/10 * * * * python3 /home/$USER/chae-media-stack/services/bazarr/auto_translate.py
+*/10 * * * * python3 /home/$USER/stack/services/bazarr/auto_translate.py
 
 # Verificar subtítulos ES faltantes cada 6 horas
-0 */6 * * * python3 /home/$USER/chae-media-stack/scripts/check_es_subs.py
+0 */6 * * * python3 /home/$USER/stack/scripts/check_es_subs.py
 
 # Backup diario a las 3am
-0 3 * * * /home/$USER/chae-media-stack/scripts/backup-stack.sh
+0 3 * * * /home/$USER/stack/scripts/backup-stack.sh
 ```
 
 **Importante:** reemplazá `$USER` por tu nombre de usuario real.
