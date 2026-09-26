@@ -366,18 +366,22 @@ tar_archive() {
 # Con --ignore-failed-read esos archivos se saltan en silencio; esto los hace
 # visibles. No es decorativo: sin esto, perder credenciales no deja rastro.
 warn_unreadable() {
-  local name="$1" src="$2" f found=0
-  while IFS= read -r f; do
+  local name="$1" src="$2" f
+  local -a files=()
+  # "|| true" NO es cosmetico. find sale con 1 cuando topa con un directorio
+  # sin permiso (services/scrutiny/influxdb), y eso dispara el trap ERR — que
+  # se hereda al subshell de <(...) y escribe a su fd 1, que es la FIFO que
+  # estamos leyendo. El mensaje de error entraba en el array como si fuera un
+  # nombre de archivo. Con find dentro de una lista || no hay trap.
+  mapfile -t files < <(find "$src" -type f \! -readable 2>/dev/null || true)
+  [[ "${#files[@]}" -gt 0 ]] || return 0
+  log "WARN: $name — archivos NO respaldados por permisos:"
+  for f in "${files[@]}"; do
     [[ -n "$f" ]] || continue
-    if [[ "$found" -eq 0 ]]; then
-      log "WARN: $name — archivos NO respaldados por permisos:"
-      found=1
-    fi
     log "        - ${f#"$PROJECT_DIR"/} (legible solo por root; requiere chown o backup con sudo)"
-  done < <(find "$src" -type f \! -readable 2>/dev/null)
-  if [[ "$found" -eq 1 ]]; then
-    log "WARN: $name — el backup terminó bien pero esos archivos NO están en el tar"
-  fi
+  done
+  log "WARN: $name — el backup terminó bien pero esos archivos NO están en el tar"
+  return 0
 }
 
 for pair in "${CONFIG_DIRS[@]}"; do
