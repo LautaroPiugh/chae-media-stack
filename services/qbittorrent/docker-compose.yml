@@ -11,11 +11,11 @@ services:
       - TORRENTING_PORT=6881
     volumes:
       - ./config:/config
-      - ${DOWNLOADS_ROOT:-/opt/downloads}:/downloads
-      - ${MEDIA_ROOT:-/opt/media}:/media
+      - ${DOWNLOADS_ROOT:-/mnt/media2/downloads}:/downloads
+      - ${MEDIA_ROOT:-/mnt/media}:/media
     ports:
       - "127.0.0.1:8080:8080"
-      - "${MEDIA_SERVER_IP:-192.168.1.100}:8080:8080"
+      - "${MEDIA_SERVER_IP:-192.168.0.200}:8080:8080"
       - "6881:6881"
       - "6881:6881/udp"
     networks:

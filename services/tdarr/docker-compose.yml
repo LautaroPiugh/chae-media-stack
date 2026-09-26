@@ -22,12 +22,12 @@ services:
       - ./server:/app/server
       - ./configs:/app/configs
       - ./logs:/app/logs
-      - ${MEDIA_ROOT:-/opt/media}:/media
-      - ${DOWNLOADS_ROOT:-/opt/downloads}:/downloads
-      - ${DOWNLOADS_ROOT:-/opt/downloads}/tdarr-cache:/temp
+      - ${MEDIA_ROOT:-/mnt/media}:/media
+      - ${DOWNLOADS_ROOT:-/mnt/media2/downloads}:/downloads
+      - ${DOWNLOADS_ROOT:-/mnt/media2/downloads}/tdarr-cache:/temp
     ports:
       - "127.0.0.1:8265:8265"
-      - "${MEDIA_SERVER_IP:-192.168.1.100}:8265:8265"
+      - "${MEDIA_SERVER_IP:-192.168.0.200}:8265:8265"
     networks:
       - qbittorrent_default
     mem_limit: 2g
@@ -60,9 +60,9 @@ services:
     volumes:
       - ./configs:/app/configs
       - ./logs:/app/logs
-      - ${MEDIA_ROOT:-/opt/media}:/media
-      - ${DOWNLOADS_ROOT:-/opt/downloads}:/downloads
-      - ${DOWNLOADS_ROOT:-/opt/downloads}/tdarr-cache:/temp
+      - ${MEDIA_ROOT:-/mnt/media}:/media
+      - ${DOWNLOADS_ROOT:-/mnt/media2/downloads}:/downloads
+      - ${DOWNLOADS_ROOT:-/mnt/media2/downloads}/tdarr-cache:/temp
     networks:
       - qbittorrent_default
     mem_limit: 8g

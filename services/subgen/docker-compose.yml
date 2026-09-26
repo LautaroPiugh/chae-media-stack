@@ -6,7 +6,7 @@ services:
     volumes:
       - './models:/subgen/models'
       - './subgen.env:/subgen/subgen.env:ro'
-      - '${MEDIA_ROOT:-/opt/media}:/media:ro'
+      - '${MEDIA_ROOT:-/mnt/media}:/media:ro'
     environment:
       LOG_LEVEL: debug
       NAME_SERVERS: 9.9.9.9
@@ -17,5 +17,5 @@ services:
       MODEL_PATH: ./models
     ports:
       - "127.0.0.1:9000:9000"
-      - "${MEDIA_SERVER_IP:-192.168.1.100}:9000:9000"
+      - "${MEDIA_SERVER_IP:-192.168.0.200}:9000:9000"
     mem_limit: 8g

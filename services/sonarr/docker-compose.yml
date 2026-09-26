@@ -9,10 +9,10 @@ services:
       - TZ=${TZ:-Etc/UTC}
     volumes:
       - ./config:/config
-      - ${MEDIA_ROOT:-/opt/media}:/media
+      - ${MEDIA_ROOT:-/mnt/media}:/media
     ports:
       - "127.0.0.1:8989:8989"
-      - "${MEDIA_SERVER_IP:-192.168.1.100}:8989:8989"
+      - "${MEDIA_SERVER_IP:-192.168.0.200}:8989:8989"
     networks:
       - qbittorrent_default
     healthcheck:
