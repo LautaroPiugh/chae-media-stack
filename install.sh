@@ -294,7 +294,14 @@ else
     tries=0
     while [ $tries -lt 24 ]; do
       st=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}running{{end}}' "$cname" 2>/dev/null || echo "missing")
-      [ "$st" = "healthy" ] || [ "$st" = "running" ] && break
+      # Antes: [ "$st" = "healthy" ] || [ "$st" = "running" ] && break
+      # evalúa como A || (B && break): si A es falso y B verdadero rompe, pero
+      # si A es verdadero no rompe — igual funcionaba de chiripa. Peor: con
+      # st=exited, A falso y B falso, no rompía y además el && ligaba mal.
+      # Forma explícita: solo sale del loop en healthy/running.
+      case "$st" in
+        healthy|running) break ;;
+      esac
       tries=$((tries+1)); sleep 5
     done
     case "$st" in

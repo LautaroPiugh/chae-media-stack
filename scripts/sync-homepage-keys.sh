@@ -38,10 +38,15 @@ for app in radarr sonarr prowlarr; do
     fi
 done
 
-bazarr_ini="$DIR/services/bazarr/config/config/config.ini"
-if [ -f "$bazarr_ini" ]; then
-    key=$(awk '/^\[auth\]/,/^\[/' "$bazarr_ini" | get_key /dev/null 'api_key *= *[a-f0-9]{32}')
-    set_key BAZARR "$key"
+# Bazarr+ (ghcr.io/lavx/bazarr) cifra la API key en reposo en config.yaml
+# (token Fernet, prefijo gAAAAA). No es legible desde acá, y antes este script
+# la buscaba en config.ini — que Bazarr+ no usa — y ademas tiraba el resultado
+# del awk contra /dev/null, así que siempre daba vacío en silencio.
+# La key hay que pegarla a mano; lo único que aporta este bloque es decirlo.
+bazarr_cfg="$DIR/services/bazarr/config/config/config.yaml"
+if [ -f "$bazarr_cfg" ] && grep -q 'CHANGEME_BAZARR' "$HP"; then
+    echo "  ▲ BAZARR: la API key está cifrada en config.yaml (Fernet), no se puede leer."
+    echo "    Pegala a mano en $HP (Bazarr → Configuración → General → API key)."
 fi
 
 seerr_json="$DIR/services/jellyseerr/config/settings.json"
