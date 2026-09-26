@@ -508,7 +508,29 @@ print_url Tdarr 8265;         print_url Maintainerr 8787
 
 echo "${FB}┃${R}"
 if [ ${#FAILS[@]} -gt 0 ]; then
-  failx "servicios con problemas: ${FAILS[*]} — revisá sus logs"
+  failx "problemas: ${FAILS[*]} — revisá sus logs"
+  INCOMPLETE=1
+else
+  INCOMPLETE=0
+fi
+
+if [ "$INCOMPLETE" -eq 1 ]; then
+cat << EOF
+
+  ${FB}╭──────────────────────────────────────────────────────╮${R}
+  ${FB}│${R}  ${B}${RED}Instalación incompleta${R}
+  ${FB}│${R}
+  ${FB}│${R}  ${SLV}Fallaron:${R} ${FAILS[*]}
+  ${FB}│${R}  ${SLV}Lo que si salió bien quedo desplegado.${R}
+  ${FB}│${R}  ${DIM}Corregí lo de arriba y volvé a correr:${R}
+  ${FB}│${R}  ${DIM}  bash install.sh${R}
+  ${FB}╰──────────────────────────────────────────────────────╯${R}
+EOF
+  footer
+  # Salir distinto de cero aunque losindependientes hayan salido bien: un
+  # automatizador, o el usuario, tiene que poder distinguir instalacion
+  # completa de parcial por el exit code y no leyendo el cartel.
+  exit 1
 fi
 
 cat << EOF
