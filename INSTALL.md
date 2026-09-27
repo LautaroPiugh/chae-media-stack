@@ -399,6 +399,9 @@ Agregar estas líneas:
 
 # Backup diario a las 3am
 0 3 * * * /home/$USER/stack/scripts/backup-stack.sh
+
+# Vigilar memoria de qBittorrent (detecta fuga de RAM)
+17 * * * * /home/$USER/stack/scripts/check-container-memory.sh chae-qbittorrent 1024
 ```
 
 **Importante:** reemplazá `$USER` por tu nombre de usuario real.
