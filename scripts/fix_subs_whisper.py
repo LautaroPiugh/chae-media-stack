@@ -29,6 +29,30 @@ GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/{m}:genera
 FFMPEG_CONTAINER = 'chae-bazarr'
 VIDEO_EXTS = ('.mkv', '.mp4', '.avi', '.m4v')
 
+# Whisper `medium` en CPU procesa ~0.5s de audio por segundo de pared, asi que el
+# timeout del cliente tiene que escalar con la duracion del medio. Un valor fijo
+# de 3600s solo cubre ~30 min de audio: cualquier episodio mas largo fallaba en
+# los 3 reintentos, quemando horas de CPU sin entregar nunca un subtitulo.
+WHISPER_RATE = float(os.getenv('WHISPER_RATE', '0.5'))
+WHISPER_MARGIN = float(os.getenv('WHISPER_MARGIN', '2.2'))
+WHISPER_TIMEOUT_FLOOR = int(os.getenv('WHISPER_TIMEOUT_FLOOR', '600'))
+WHISPER_TIMEOUT_CEIL = int(os.getenv('WHISPER_TIMEOUT_CEIL', '14400'))
+
+
+def whisper_timeout(duration_s):
+    """Timeout de una request de transcripcion, derivado de la duracion del medio."""
+    try:
+        dur = float(duration_s or 0)
+    except (TypeError, ValueError):
+        dur = 0.0
+    # NaN no es <= 0 y tampoco escala: sin este chequeo caeria al floor (600s),
+    # que es el timeout mas corto posible, justo el peor resultado.
+    if dur <= 0 or dur != dur:
+        # Duracion desconocida: asumir el peor caso en vez de adivinar corto.
+        return WHISPER_TIMEOUT_CEIL
+    est = dur / WHISPER_RATE * WHISPER_MARGIN
+    return int(min(WHISPER_TIMEOUT_CEIL, max(WHISPER_TIMEOUT_FLOOR, est)))
+
 
 def load_env(path=None):
     path = path or ENV_PATH
@@ -80,20 +104,23 @@ def extract_audio(video_path, out_path=None):
     return tmp
 
 
-def whisper_transcribe(audio_path, language=None, attempts=3):
+def whisper_transcribe(audio_path, language=None, attempts=3, duration_s=None):
     if not os.path.isfile(audio_path):
         return None
     data = {'model': 'whisper-1', 'response_format': 'srt', 'temperature': '0'}
     if language:
         data['language'] = language
+    timeout = whisper_timeout(duration_s)
+    log(f"    timeout={timeout}s (dur={int(duration_s) if duration_s else '?'}s, "
+        f"rate={WHISPER_RATE}, margen={WHISPER_MARGIN}x)")
     for attempt in range(1, attempts + 1):
         try:
             with open(audio_path, 'rb') as f:
                 r = requests.post(f"{WHISPER_URL}/v1/audio/transcriptions",
                                   files={'file': (os.path.basename(audio_path), f, 'audio/mpeg')},
-                                  data=data, timeout=3600)
+                                  data=data, timeout=timeout)
         except requests.RequestException as e:
-            log(f"    whisper error (intento {attempt}/{attempts}): {e}")
+            log(f"    whisper error (intento {attempt}/{attempts}, timeout={timeout}s): {e}")
             if attempt < attempts:
                 time.sleep(min(60, 15 * attempt))
             continue
@@ -273,7 +300,7 @@ def repair_file(video_path, srt_path=None, keep_backup=True):
         return False, "no se pudo extraer audio"
     try:
         log(f"    audio extraido ({os.path.getsize(audio) // 1024} KB), transcribiendo...")
-        raw = whisper_transcribe(audio)
+        raw = whisper_transcribe(audio, duration_s=dur)
     finally:
         try:
             os.remove(audio)
