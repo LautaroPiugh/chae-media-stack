@@ -248,6 +248,115 @@ def translate_texts(texts):
     return out
 
 
+# ── Pre-flight de traductores ────────────────────────────────────────────────
+# Transcribir cuesta entre 25 min y 2 h de CPU por archivo. Si despues no hay
+# traductor, el SRT ingles se tira a la basura. Cuando ambos motores caen por
+# cuota (DeepL 456, Gemini 429 "quota"), lo unico que sale de la corrida es una
+# factura de CPU. Este probe los descarta antes de gastar la transcripcion.
+#
+# Falla ABIERTO a proposito: si un motor no se puede sondear con certeza, se
+# asume que puede trabajar. Un falso negativo dejaria series sin subtitulo
+# cuando el motor si funciona, que es peor que un chequeo de sobra.
+PROBE_TEXT = 'hello'
+PROBE_TTL = 900  # 15 min de gracia antes de re-sondear un motor marcado muerto
+
+
+def _probe_cache_file():
+    d = os.environ.get('XDG_STATE_HOME') or os.path.join(
+        os.path.expanduser('~'), '.local', 'state')
+    return os.path.join(d, 'whisper-translator-probe.json')
+
+
+def _load_probe_cache():
+    try:
+        with open(_probe_cache_file()) as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_probe_cache(data):
+    path = _probe_cache_file()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w') as f:
+            json.dump(data, f)
+    except OSError:
+        pass
+
+
+def _probe_deepl():
+    """'alive', 'dead' (cuota agotada) o 'unknown'."""
+    if not DEEPL_API_KEY:
+        return 'unknown'
+    try:
+        r = requests.post(DEEPL_URL,
+                          headers={'Authorization': f'DeepL-Auth-Key {DEEPL_API_KEY}'},
+                          json={'text': [PROBE_TEXT], 'target_lang': 'ES'},
+                          timeout=30)
+    except requests.RequestException:
+        return 'unknown'
+    if r.status_code == 200:
+        return 'alive'
+    if r.status_code == 456:
+        return 'dead'
+    return 'unknown'
+
+
+def _probe_gemini():
+    """'alive', 'dead' (cuota agotada) o 'unknown'."""
+    if not GEMINI_API_KEY:
+        return 'unknown'
+    for model in GEMINI_MODELS:
+        try:
+            r = requests.post(GEMINI_URL.format(m=model, k=GEMINI_API_KEY),
+                              json={'contents': [{'parts': [{'text': 'di hola'}]}]},
+                              timeout=45)
+        except requests.RequestException:
+            continue
+        if r.status_code == 200:
+            return 'alive'
+        # 429 es ambiguo: "quota" es cuota agotada, "rate limit" es throttling
+        # pasajero. Solo el primero justifica dar el motor por muerto.
+        if r.status_code == 429 and 'quota' in r.text.lower():
+            return 'dead'
+    return 'unknown'
+
+
+def translators_ready():
+    """True si algun motor puede traducir. Cachea los caidos para no re-sondear."""
+    cache = _load_probe_cache()
+    now = time.time()
+    procs = {'DeepL': _probe_deepl, 'Gemini': _probe_gemini}
+    states = {}
+    to_probe = []
+    for name, fn in procs.items():
+        entry = cache.get(name) or {}
+        if now - entry.get('checked_at', 0) < PROBE_TTL:
+            states[name] = entry.get('state', 'unknown')
+        else:
+            to_probe.append(name)
+    for name in to_probe:
+        state = procs[name]()
+        states[name] = state
+        cache[name] = {'state': state, 'checked_at': now}
+    if to_probe:
+        _save_probe_cache(cache)
+
+    alive = [n for n, s in states.items() if s == 'alive']
+    dead = [n for n, s in states.items() if s == 'dead']
+    unknown = [n for n, s in states.items() if s == 'unknown']
+    if dead:
+        log(f"    traductores sin cuota: {', '.join(dead)}")
+    # Solo se bloquea si TODOS los motores quedaron confirmados muertos. Un
+    # 'unknown' cuenta como posible: bloquear ahi dejaria series sin subtitulo
+    # por un fallo de red que quizas ni impedia traducir.
+    if not alive and not unknown:
+        return False
+    return True
+
+
 def translate_srt(content):
     """Traducir SRT a ES conservando timestamps. Devuelve el SRT o None."""
     blocks = sub_qa.parse_srt(content)
@@ -294,6 +403,10 @@ def repair_file(video_path, srt_path=None, keep_backup=True):
     dest = target_srt_path(video_path)
     dur = sub_qa.video_duration(video_path)
     log(f"  whisper+traducir: {os.path.basename(video_path)} (dur={dur and int(dur)}s)")
+
+    # Si no hay traductor, la transcripcion que sigue no sirve para nada.
+    if not translators_ready():
+        return False, "sin traductores con cuota (transcripcion evitada)"
 
     audio = extract_audio(video_path)
     if not audio:
