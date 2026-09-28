@@ -787,6 +787,24 @@ def load_external_en_sub(video_path):
 def load_en_sub(video_path):
     return load_external_en_sub(video_path) or extract_embedded_en_sub(video_path)
 
+def whisper_worth_it(video_path, indent='    '):
+    """Ultima linea antes de transcribir: si ya hay un sub EN, no transcribir.
+
+    Whisper sobre un medio que ya tiene sub en ingles produce exactamente el
+    mismo texto que ya esta en disco, y encima se nota. La FASE C se disparaba
+    con `not done`, que tambien es True cuando la traduccion fallo por cuota,
+    no solo cuando no habia ningun sub en ingles. Por ahi se gastaban de 25
+    minutos a 2 horas de CPU por archivo para terminar con las manos vacias.
+
+    La regla del skill es "whisper solo si no hay ni ES ni ingles"; esta
+    funcion la hace cumplir en un solo lugar para que peliculas y series no
+    puedan divergir otra vez.
+    """
+    if load_en_sub(video_path):
+        log(f"{indent}hay sub EN pero falta traductor: no transcribo, whisper seria redundante")
+        return False
+    return True
+
 def extract_embedded_en_sub(video_path):
     """Extraer subtitulo embebido en ingles de un video (via ffmpeg en chae-bazarr)"""
     if not video_path or not os.path.isfile(video_path):
@@ -1030,12 +1048,13 @@ def process_movies():
 
         # ══ FASE C — whisper (ultima bala) ══
         if not PROVIDERS_ONLY and not done and os.path.isfile(movie_file or ''):
-            log(f"    Fallback whisper sobre el audio...")
-            ok_w, motivo_w = subfix.repair_file(movie_file, subfix.target_srt_path(movie_file), keep_backup=False)
-            if ok_w:
-                done = True
-            else:
-                log(f"    whisper: {motivo_w}")
+            if whisper_worth_it(movie_file, '    '):
+                log(f"    Fallback whisper sobre el audio...")
+                ok_w, motivo_w = subfix.repair_file(movie_file, subfix.target_srt_path(movie_file), keep_backup=False)
+                if ok_w:
+                    done = True
+                else:
+                    log(f"    whisper: {motivo_w}")
 
         if done:
             bazarr_scan_movie(radarr_id)
@@ -1208,13 +1227,14 @@ def process_series():
 
             # ══ FASE C — whisper (ultima bala) ══
             if not PROVIDERS_ONLY and not done:
-                log(f"      Fallback whisper sobre el audio...")
-                ok_w, motivo_w = subfix.repair_file(video_path, subfix.target_srt_path(video_path),
-                                                    keep_backup=False)
-                if ok_w:
-                    done = True
-                else:
-                    log(f"      whisper: {motivo_w}")
+                if whisper_worth_it(video_path, '      '):
+                    log(f"      Fallback whisper sobre el audio...")
+                    ok_w, motivo_w = subfix.repair_file(video_path, subfix.target_srt_path(video_path),
+                                                        keep_backup=False)
+                    if ok_w:
+                        done = True
+                    else:
+                        log(f"      whisper: {motivo_w}")
 
             if done:
                 downloaded += 1
