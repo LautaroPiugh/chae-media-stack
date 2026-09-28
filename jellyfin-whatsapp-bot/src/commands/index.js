@@ -1,4 +1,5 @@
 const { handleHelp } = require('./help');
+const { handleWelcome, hasBeenWelcomed, markWelcomed } = require('./welcome');
 const { handleStatus } = require('./status');
 const { handleMovieSearch } = require('./movieSearch');
 const { handleSeriesSearch } = require('./seriesSearch');
@@ -112,7 +113,21 @@ function getFallbackMessage(text, isAdmin) {
 
 function processCommand(text, userJid) {
   const lower = text.toLowerCase().trim();
-  const isAdmin = isAdminUser(userJid);
+    const isAdmin = isAdminUser(userJid);
+  
+    // Explicit re-read, available to the owner too so the text can be previewed.
+    if (lower === '/hola' || lower === '/bienvenida' || lower === '/welcome') {
+      markWelcomed(userJid);
+      return handleWelcome();
+    }
+  
+    // First contact from an authorized non-owner user: orient them instead of
+    // letting them trip over an unrecognized message. Marked before replying so
+    // a delivery failure cannot produce an endless greeting loop.
+    if (!isAdmin && !hasBeenWelcomed(userJid)) {
+      markWelcomed(userJid);
+      return handleWelcome();
+    }
 
   if (lower === '/ayuda' || lower === '/help' || lower === '/ayuda admin' || lower === '/help admin') {
     return handleHelp(userJid, text);
