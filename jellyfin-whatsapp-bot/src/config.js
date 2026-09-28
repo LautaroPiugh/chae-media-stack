@@ -4,11 +4,15 @@ const config = {
   port: process.env.PORT || 3555,
   serviceName: process.env.SERVICE_NAME || 'Jellyfin WhatsApp Bot',
 
-  whatsapp: {
-    owner: process.env.WHATSAPP_OWNER || '',
-    updateNotifyToken: process.env.WHATSAPP_UPDATE_NOTIFY_TOKEN || '',
-    pairPhone: (process.env.WHATSAPP_PAIR_PHONE || '').replace(/\D/g, ''),
-  },
+    whatsapp: {
+      owner: process.env.WHATSAPP_OWNER || '',
+      // Numbers allowed to reach the command handler at all. The owner is
+      // implicitly included so a missing WHATSAPP_USERS cannot lock the owner
+      // out of their own bot.
+      users: (process.env.WHATSAPP_USERS || '').trim(),
+      updateNotifyToken: process.env.WHATSAPP_UPDATE_NOTIFY_TOKEN || '',
+      pairPhone: (process.env.WHATSAPP_PAIR_PHONE || '').replace(/\D/g, ''),
+    },
 
   admin: {
     registerCode: process.env.ADMIN_REGISTER_CODE || '',

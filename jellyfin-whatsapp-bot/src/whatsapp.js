@@ -138,7 +138,14 @@ async function startWhatsApp() {
         continue;
       }
 
-      const senderJid = getAuthorizedSenderJid(msg.key, config.whatsapp.owner);
+      // The owner is always authorized; WHATSAPP_USERS adds more. Admin
+      // commands stay owner-only because isAdminUser still compares against
+      // config.whatsapp.owner, so an extra number can request media but cannot
+      // restart services or trigger system updates.
+      const authorized = [config.whatsapp.owner, config.whatsapp.users]
+        .filter((value) => value && String(value).trim())
+        .join(',');
+      const senderJid = getAuthorizedSenderJid(msg.key, authorized);
       if (!senderJid) {
         console.warn('[WhatsApp] Ignored: unauthorized sender');
         continue;

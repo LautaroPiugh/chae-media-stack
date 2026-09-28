@@ -70,37 +70,60 @@ function resolveLidToPhone(lidUser) {
   return '';
 }
 
-function getAuthorizedSenderJid(messageKey, owner) {
-  const ownerDigits = cleanDigits(owner);
-  if (!ownerDigits) {
+  /**
+   * Accepts a single number, a comma separated string, or an array, and returns
+   * the normalized digits of every authorized user. Empty entries are dropped so
+   * a trailing comma or a blank WHATSAPP_USERS cannot authorize an empty number,
+   * and duplicates are collapsed because the caller passes the owner separately
+   * from the users list.
+   */
+  function parseAuthorizedNumbers(value) {
+    const list = Array.isArray(value) ? value : [value];
+  
+    return [
+      ...new Set(
+        list
+          .flatMap((entry) => String(entry || '').split(','))
+          .map((entry) => normalizeWhatsAppNumber(entry))
+          .filter((digits) => digits.length > 0),
+      ),
+    ];
+  }
+  
+  function getAuthorizedSenderJid(messageKey, authorized) {
+    const numbers = parseAuthorizedNumbers(authorized);
+    if (numbers.length === 0) {
+      return '';
+    }
+  
+    const candidates = [messageKey?.remoteJid, messageKey?.senderPn, messageKey?.participantPn];
+  
+    for (const candidate of candidates) {
+      for (const number of numbers) {
+        if (isSameWhatsAppUser(number, candidate)) {
+          return normalizeUserJid(candidate);
+        }
+      }
+    }
+  
+    // Same digits on a different server (e.g. phone delivered as @lid alias).
+    for (const candidate of candidates) {
+      const digits = candidate ? cleanDigits(candidate) : '';
+      if (digits && numbers.includes(digits)) {
+        return normalizeUserJid(digits);
+      }
+    }
+  
+    // @lid sender: resolve through the LID mapping stored by Baileys.
+    for (const candidate of candidates) {
+      const phone = resolveLidToPhone(candidate);
+      if (phone && numbers.includes(phone)) {
+        return normalizeUserJid(phone);
+      }
+    }
+  
     return '';
   }
-
-  const candidates = [messageKey?.remoteJid, messageKey?.senderPn, messageKey?.participantPn];
-
-  for (const candidate of candidates) {
-    if (isSameWhatsAppUser(owner, candidate)) {
-      return normalizeUserJid(candidate);
-    }
-  }
-
-  // Same digits on a different server (e.g. phone delivered as @lid alias).
-  for (const candidate of candidates) {
-    if (candidate && cleanDigits(candidate) === ownerDigits) {
-      return normalizeUserJid(owner);
-    }
-  }
-
-  // @lid sender: resolve through the LID mapping stored by Baileys.
-  for (const candidate of candidates) {
-    const phone = resolveLidToPhone(candidate);
-    if (phone && phone === ownerDigits) {
-      return normalizeUserJid(owner);
-    }
-  }
-
-  return '';
-}
 
 function isValidJid(jid) {
   const raw = String(jid || '').trim();
@@ -132,9 +155,10 @@ function normalizeUserJid(value) {
   return normalizedUser ? `${normalizedUser}@${server}` : '';
 }
 
-module.exports = {
-  cleanDigits,
-  getAuthorizedSenderJid,
+  module.exports = {
+    cleanDigits,
+    getAuthorizedSenderJid,
+    parseAuthorizedNumbers,
   normalizeWhatsAppNumber,
   normalizeUserJid,
   numberToJid,
