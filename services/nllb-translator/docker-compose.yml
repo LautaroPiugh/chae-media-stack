@@ -1,0 +1,17 @@
+services:
+  nllb-translator:
+    build: .
+    image: chae/nllb-translator:local
+    restart: "no"
+    stdin_open: true
+    tty: false
+    cpus: 3
+    mem_limit: 6g
+    environment:
+      HF_HOME: /models
+      TRANSFORMERS_CACHE: /models
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "3"
+      MKL_NUM_THREADS: "3"
+    volumes:
+      - ./models:/models

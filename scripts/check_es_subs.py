@@ -121,8 +121,6 @@ def providers_get(url, timeout_sec=60):
     return r.json() if r.status_code == 200 else {}
 
 MEDIA_MOVIES = '/mnt/media/movies'
-DEEPL_API_KEY = os.getenv('DEEPL_API_KEY', '')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 OMDB_API_KEY = os.getenv('OMDB_API_KEY', '')
 OMDB_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'omdb_cache.json')
 omdb_cache = {}
@@ -732,8 +730,8 @@ def download_english_sub(imdb_id, parent_imdb_id=None, season=None, episode=None
 def parse_srt_blocks(content):
     return sub_qa.parse_srt(content)
 
-def translate_with_deepl(srt_content, title, year, movie_dir=None, video_path=None):
-    """Traducir SRT a ES (DeepL con fallback Gemini) y guardarlo validado."""
+def translate_to_es(srt_content, title, year, movie_dir=None, video_path=None):
+    """Traducir un SRT EN a ES con NLLB local y guardarlo validado."""
     if video_path:
         movie_dir = os.path.dirname(video_path)
     if not movie_dir:
@@ -748,9 +746,9 @@ def translate_with_deepl(srt_content, title, year, movie_dir=None, video_path=No
         log(f"    No se pudo parsear el SRT")
         return False
 
-    final = subfix.translate_srt(srt_content)
+    final = subfix.translate_srt(srt_content, source_lang='eng_Latn')
     if not final:
-        log(f"    Fallo la traduccion (DeepL y Gemini)")
+        log(f"    Fallo la traduccion local NLLB")
         return False
 
     if save_es_sub(final, title, year, movie_dir, video_path=video_path):
@@ -787,7 +785,7 @@ def load_external_en_sub(video_path):
 def load_en_sub(video_path):
     return load_external_en_sub(video_path) or extract_embedded_en_sub(video_path)
 
-def whisper_worth_it(video_path, indent='    '):
+def whisper_worth_it(video_path, indent='    ', source_subtitle_found=False):
     """Ultima linea antes de transcribir: si ya hay un sub EN, no transcribir.
 
     Whisper sobre un medio que ya tiene sub en ingles produce exactamente el
@@ -800,7 +798,7 @@ def whisper_worth_it(video_path, indent='    '):
     funcion la hace cumplir en un solo lugar para que peliculas y series no
     puedan divergir otra vez.
     """
-    if load_en_sub(video_path):
+    if source_subtitle_found or load_en_sub(video_path):
         log(f"{indent}hay sub EN pero falta traductor: no transcribo, whisper seria redundante")
         return False
     return True
@@ -987,6 +985,7 @@ def process_movies():
         imdb_id = movie.get('imdbId', '')
         movie_dir = os.path.join(MEDIA_MOVIES, f"{title} ({year})")
         done = False
+        english_found = False
 
         # ══ FASE A — descargar un sub ES real (lo mejor que haya online) ══
         # 1) Providers de Bazarr (cuenta Bazarr, sin cuota de la app)
@@ -1014,7 +1013,8 @@ def process_movies():
         # 3) Sub EN embebido/externo + traducir (sync perfecto)
         if not PROVIDERS_ONLY and not done:
             en_sub = load_en_sub(movie_file)
-            if en_sub and translate_with_deepl(en_sub, title, year, movie_dir):
+            english_found = bool(en_sub)
+            if en_sub and translate_to_es(en_sub, title, year, movie_dir):
                 done = True
 
         # 4) Providers de Bazarr en EN + traducir
@@ -1036,19 +1036,21 @@ def process_movies():
                 if r.status_code == 204:
                     time.sleep(2)
                     en_sub = load_en_sub(movie_file)
-                    if en_sub and translate_with_deepl(en_sub, title, year, movie_dir):
+                    english_found = english_found or bool(en_sub)
+                    if en_sub and translate_to_es(en_sub, title, year, movie_dir):
                         done = True
 
         # 5) OpenSubtitles API EN + traducir (consume cuota)
         if not PROVIDERS_ONLY and not done:
             log(f"    Sin subs ES descargables. Intentando EN para traducir...")
             en_sub = download_english_sub(imdb_id)
-            if en_sub and translate_with_deepl(en_sub, title, year, movie_dir):
+            english_found = english_found or bool(en_sub)
+            if en_sub and translate_to_es(en_sub, title, year, movie_dir):
                 done = True
 
         # ══ FASE C — whisper (ultima bala) ══
         if not PROVIDERS_ONLY and not done and os.path.isfile(movie_file or ''):
-            if whisper_worth_it(movie_file, '    '):
+            if whisper_worth_it(movie_file, '    ', english_found):
                 log(f"    Fallback whisper sobre el audio...")
                 ok_w, motivo_w = subfix.repair_file(movie_file, subfix.target_srt_path(movie_file), keep_backup=False)
                 if ok_w:
@@ -1153,6 +1155,7 @@ def process_series():
                 log(f"    S{season}E{ep_num} ({ep_title}) - Falta ES")
             ep_imdb_id = get_episode_imdb_id(title, season, ep_num)
             done = False
+            english_found = False
 
             # ══ FASE A — descargar un sub ES real (lo mejor que haya online) ══
             # 1) Providers de Bazarr ES (cuenta Bazarr, sin cuota de la app)
@@ -1187,13 +1190,14 @@ def process_series():
 
             # ══ FASE B — traducir del inglés (solo si no había ES descargable) ══
             # 4) Sub EN embebido/externo + traducir (sync perfecto)
-            if not PROVIDERS_ONLY and not done and (DEEPL_API_KEY or GEMINI_API_KEY):
+            if not PROVIDERS_ONLY and not done:
                 en_sub = load_en_sub(video_path)
-                if en_sub and translate_with_deepl(en_sub, title, 0, video_path=video_path):
+                english_found = bool(en_sub)
+                if en_sub and translate_to_es(en_sub, title, 0, video_path=video_path):
                     done = True
 
             # 5) Providers de Bazarr EN + traducir
-            if not PROVIDERS_ONLY and not done and (DEEPL_API_KEY or GEMINI_API_KEY):
+            if not PROVIDERS_ONLY and not done:
                 en_avail = without_hearing_impaired(
                     [s for s in available if isinstance(s, dict) and s.get('language') == 'en']
                 )
@@ -1212,22 +1216,24 @@ def process_series():
                     if r.status_code == 204:
                         time.sleep(2)
                         en_sub = load_en_sub(video_path)
-                        if en_sub and translate_with_deepl(en_sub, title, 0, video_path=video_path):
+                        english_found = english_found or bool(en_sub)
+                        if en_sub and translate_to_es(en_sub, title, 0, video_path=video_path):
                             done = True
 
             # 6) OpenSubtitles API EN + traducir (consume cuota)
-            if not PROVIDERS_ONLY and not done and (DEEPL_API_KEY or GEMINI_API_KEY):
+            if not PROVIDERS_ONLY and not done:
                 if ep_imdb_id:
                     en_sub = download_english_sub(ep_imdb_id)
                 else:
                     en_sub = download_english_sub(None, parent_imdb_id=imdb_id,
                                                   season=season, episode=ep_num)
-                if en_sub and translate_with_deepl(en_sub, title, 0, video_path=video_path):
+                english_found = english_found or bool(en_sub)
+                if en_sub and translate_to_es(en_sub, title, 0, video_path=video_path):
                     done = True
 
             # ══ FASE C — whisper (ultima bala) ══
             if not PROVIDERS_ONLY and not done:
-                if whisper_worth_it(video_path, '      '):
+                if whisper_worth_it(video_path, '      ', english_found):
                     log(f"      Fallback whisper sobre el audio...")
                     ok_w, motivo_w = subfix.repair_file(video_path, subfix.target_srt_path(video_path),
                                                         keep_backup=False)
@@ -1287,7 +1293,7 @@ def translate_movie_by_title(title_input):
         return f"No se pudo descargar subtítulo en inglés para {title} ({year})."
 
     movie_dir = os.path.join(MEDIA_MOVIES, f"{title} ({year})")
-    if translate_with_deepl(en_sub, title, year, movie_dir):
+    if translate_to_es(en_sub, title, year, movie_dir):
         # Re-check Bazarr after saving
         time.sleep(2)
         return f"✅ {title} ({year}) traducido al español correctamente."

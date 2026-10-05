@@ -1,0 +1,4 @@
+torch==2.5.1+cpu
+transformers==4.46.3
+sentencepiece==0.2.0
+langdetect==1.0.9

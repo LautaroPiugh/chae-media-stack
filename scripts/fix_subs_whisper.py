@@ -20,11 +20,9 @@ import sub_qa
 ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'check_es_subs.env')
 
 WHISPER_URL = os.getenv('WHISPER_URL', 'http://127.0.0.1:9000')
-DEEPL_URL = 'https://api-free.deepl.com/v2/translate'
-GEMINI_MODELS = [m.strip() for m in os.getenv(
-    'GEMINI_MODELS', 'gemini-3.6-flash,gemini-flash-latest'
-).split(',') if m.strip()]
-GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={k}'
+NLLB_COMPOSE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            'services', 'nllb-translator', 'docker-compose.yml')
+NLLB_TIMEOUT = int(os.getenv('NLLB_TIMEOUT', '7200'))
 
 FFMPEG_CONTAINER = 'chae-bazarr'
 VIDEO_EXTS = ('.mkv', '.mp4', '.avi', '.m4v')
@@ -68,8 +66,6 @@ def load_env(path=None):
 
 
 load_env()
-DEEPL_API_KEY = os.getenv('DEEPL_API_KEY', '')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
 
 def log(msg):
@@ -140,224 +136,50 @@ def whisper_transcribe(audio_path, language=None, attempts=3, duration_s=None):
     return None
 
 
-def _chunks(items, size):
-    for i in range(0, len(items), size):
-        yield items[i:i + size]
-
-
-def translate_deepl(texts):
-    """DeepL acepta un array de textos y devuelve uno por entrada (sin separadores)."""
-    if not DEEPL_API_KEY or not texts:
+def translate_texts(texts, source_lang=None):
+    """Ejecuta NLLB local y efimero; no consulta proveedores externos."""
+    payload = {'texts': texts}
+    if source_lang:
+        payload['source_lang'] = source_lang
+    compose = ['docker', 'compose', '-f', NLLB_COMPOSE]
+    log(f"    NLLB local: levantando worker efimero para {len(texts)} segmentos")
+    try:
+        build = subprocess.run(compose + ['build', 'nllb-translator'], text=True,
+                               capture_output=True, timeout=NLLB_TIMEOUT)
+        if build.returncode != 0:
+            detail = (build.stderr or build.stdout).strip().splitlines()
+            log(f"    NLLB no pudo construirse: {detail[-1] if detail else 'sin detalle'}")
+            return None
+        # El build escribe progreso en stdout. La ejecucion va separada para que
+        # stdout contenga exclusivamente el JSON producido por translate.py.
+        result = subprocess.run(compose + ['run', '--rm', '-T', 'nllb-translator'],
+                                input=json.dumps(payload, ensure_ascii=False), text=True,
+                                capture_output=True, timeout=NLLB_TIMEOUT)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        log(f"    NLLB no pudo ejecutarse: {exc}")
+        return None
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip().splitlines()
+        log(f"    NLLB fallo: {detail[-1] if detail else 'sin detalle'}")
         return None
     try:
-        r = requests.post(DEEPL_URL,
-                          headers={'Authorization': f'DeepL-Auth-Key {DEEPL_API_KEY}'},
-                          json={'text': list(texts), 'target_lang': 'ES', 'preserve_formatting': True},
-                          timeout=180)
-    except requests.RequestException as e:
-        log(f"    DeepL error: {e}")
+        translated = json.loads(result.stdout)
+    except ValueError:
+        log("    NLLB devolvio JSON invalido")
         return None
-    if r.status_code != 200:
-        log(f"    DeepL HTTP {r.status_code}: {r.text[:150]}")
+    if not isinstance(translated, list) or len(translated) != len(texts):
+        log("    NLLB devolvio una cantidad incorrecta de segmentos")
         return None
-    try:
-        translations = r.json().get('translations') or []
-    except Exception:
-        return None
-    parts = [t.get('text', '') for t in translations]
-    if len(parts) != len(texts):
-        log(f"    DeepL descuadro de segmentos: {len(parts)} != {len(texts)}")
-        return None
-    parts = [p.strip() for p in parts]
-    if any(not p for p in parts):
-        log("    DeepL devolvio segmentos vacios")
-        return None
-    return parts
-
-
-def translate_gemini(texts):
-    if not GEMINI_API_KEY or not texts:
-        return None
-    prompt = (
-        "You are a professional subtitle translator. Translate each subtitle line into "
-        "natural neutral Latin American Spanish (use \"usted\" forms, avoid \"vosotros\"). "
-        "Keep tone, register and line breaks inside each element. "
-        "Return ONLY a JSON array of strings with EXACTLY the same length and order as the input. "
-        "Never return empty strings. Do not add notes or commentary.\n\n"
-        "Input:\n" + json.dumps(texts, ensure_ascii=False)
-    )
-    payload = {
-        'contents': [{'parts': [{'text': prompt}]}],
-        'generationConfig': {
-            'temperature': 0.2,
-            'responseMimeType': 'application/json',
-        },
-    }
-    for model in GEMINI_MODELS:
-        try:
-            r = requests.post(GEMINI_URL.format(m=model, k=GEMINI_API_KEY),
-                              json=payload, timeout=300)
-        except requests.RequestException as e:
-            log(f"    Gemini {model} error: {e}")
-            continue
-        if r.status_code in (404, 403, 503, 500, 502, 429):
-            log(f"    Gemini {model} HTTP {r.status_code}; probando el siguiente")
-            continue
-        if r.status_code != 200:
-            log(f"    Gemini {model} HTTP {r.status_code}: {r.text[:150]}")
-            continue
-        try:
-            raw = r.json()['candidates'][0]['content']['parts'][0]['text']
-            arr = json.loads(raw)
-        except Exception as e:
-            log(f"    Gemini {model} respuesta invalida: {e}")
-            continue
-        if not isinstance(arr, list) or len(arr) != len(texts):
-            log(f"    Gemini {model} descuadro: {len(arr) if isinstance(arr, list) else '?'} != {len(texts)}")
-            continue
-        arr = [str(x).strip() for x in arr]
-        if any(not x for x in arr):
-            log(f"    Gemini {model} devolvio segmentos vacios")
-            continue
-        return arr
-    return None
-
-
-def translate_texts(texts):
-    out = [''] * len(texts)
-    pending = list(range(len(texts)))
-    for fn, label, size in ((translate_deepl, 'DeepL', 100),
-                            (translate_gemini, 'Gemini', 180)):
-        if not pending:
-            break
-        nxt = []
-        for idxs in _chunks(pending, size):
-            sample = [texts[i] for i in idxs]
-            res = fn(sample)
-            if res is None:
-                nxt.extend(idxs)
-                continue
-            for i, t in zip(idxs, res):
-                out[i] = t
-        if nxt and nxt != pending:
-            log(f"    {label}: quedan {len(nxt)} sin traducir, pasa al siguiente motor")
-        pending = nxt
-    if pending:
-        log(f"    sin traductor para {len(pending)} segmentos")
-        return None
-    return out
-
-
-# ── Pre-flight de traductores ────────────────────────────────────────────────
-# Transcribir cuesta entre 25 min y 2 h de CPU por archivo. Si despues no hay
-# traductor, el SRT ingles se tira a la basura. Cuando ambos motores caen por
-# cuota (DeepL 456, Gemini 429 "quota"), lo unico que sale de la corrida es una
-# factura de CPU. Este probe los descarta antes de gastar la transcripcion.
-#
-# Falla ABIERTO a proposito: si un motor no se puede sondear con certeza, se
-# asume que puede trabajar. Un falso negativo dejaria series sin subtitulo
-# cuando el motor si funciona, que es peor que un chequeo de sobra.
-PROBE_TEXT = 'hello'
-PROBE_TTL = 900  # 15 min de gracia antes de re-sondear un motor marcado muerto
-
-
-def _probe_cache_file():
-    d = os.environ.get('XDG_STATE_HOME') or os.path.join(
-        os.path.expanduser('~'), '.local', 'state')
-    return os.path.join(d, 'whisper-translator-probe.json')
-
-
-def _load_probe_cache():
-    try:
-        with open(_probe_cache_file()) as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
-
-
-def _save_probe_cache(data):
-    path = _probe_cache_file()
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'w') as f:
-            json.dump(data, f)
-    except OSError:
-        pass
-
-
-def _probe_deepl():
-    """'alive', 'dead' (cuota agotada) o 'unknown'."""
-    if not DEEPL_API_KEY:
-        return 'unknown'
-    try:
-        r = requests.post(DEEPL_URL,
-                          headers={'Authorization': f'DeepL-Auth-Key {DEEPL_API_KEY}'},
-                          json={'text': [PROBE_TEXT], 'target_lang': 'ES'},
-                          timeout=30)
-    except requests.RequestException:
-        return 'unknown'
-    if r.status_code == 200:
-        return 'alive'
-    if r.status_code == 456:
-        return 'dead'
-    return 'unknown'
-
-
-def _probe_gemini():
-    """'alive', 'dead' (cuota agotada) o 'unknown'."""
-    if not GEMINI_API_KEY:
-        return 'unknown'
-    for model in GEMINI_MODELS:
-        try:
-            r = requests.post(GEMINI_URL.format(m=model, k=GEMINI_API_KEY),
-                              json={'contents': [{'parts': [{'text': 'di hola'}]}]},
-                              timeout=45)
-        except requests.RequestException:
-            continue
-        if r.status_code == 200:
-            return 'alive'
-        # 429 es ambiguo: "quota" es cuota agotada, "rate limit" es throttling
-        # pasajero. Solo el primero justifica dar el motor por muerto.
-        if r.status_code == 429 and 'quota' in r.text.lower():
-            return 'dead'
-    return 'unknown'
+    translated = [str(text).strip() for text in translated]
+    return translated if all(translated) else None
 
 
 def translators_ready():
-    """True si algun motor puede traducir. Cachea los caidos para no re-sondear."""
-    cache = _load_probe_cache()
-    now = time.time()
-    procs = {'DeepL': _probe_deepl, 'Gemini': _probe_gemini}
-    states = {}
-    to_probe = []
-    for name, fn in procs.items():
-        entry = cache.get(name) or {}
-        if now - entry.get('checked_at', 0) < PROBE_TTL:
-            states[name] = entry.get('state', 'unknown')
-        else:
-            to_probe.append(name)
-    for name in to_probe:
-        state = procs[name]()
-        states[name] = state
-        cache[name] = {'state': state, 'checked_at': now}
-    if to_probe:
-        _save_probe_cache(cache)
-
-    alive = [n for n, s in states.items() if s == 'alive']
-    dead = [n for n, s in states.items() if s == 'dead']
-    unknown = [n for n, s in states.items() if s == 'unknown']
-    if dead:
-        log(f"    traductores sin cuota: {', '.join(dead)}")
-    # Solo se bloquea si TODOS los motores quedaron confirmados muertos. Un
-    # 'unknown' cuenta como posible: bloquear ahi dejaria series sin subtitulo
-    # por un fallo de red que quizas ni impedia traducir.
-    if not alive and not unknown:
-        return False
-    return True
+    """El worker se crea bajo demanda; la ejecucion valida su disponibilidad real."""
+    return os.path.isfile(NLLB_COMPOSE)
 
 
-def translate_srt(content):
+def translate_srt(content, source_lang=None):
     """Traducir SRT a ES conservando timestamps. Devuelve el SRT o None."""
     blocks = sub_qa.parse_srt(content)
     if not blocks:
@@ -368,7 +190,7 @@ def translate_srt(content):
     texts = []
     for _, _, body in blocks:
         texts.append('\n'.join(body))
-    translated = translate_texts(texts)
+    translated = translate_texts(texts, source_lang=source_lang)
     if translated is None:
         return None
     new_blocks = []
@@ -404,9 +226,9 @@ def repair_file(video_path, srt_path=None, keep_backup=True):
     dur = sub_qa.video_duration(video_path)
     log(f"  whisper+traducir: {os.path.basename(video_path)} (dur={dur and int(dur)}s)")
 
-    # Si no hay traductor, la transcripcion que sigue no sirve para nada.
+    # Si el worker local no esta instalado, la transcripcion no serviria.
     if not translators_ready():
-        return False, "sin traductores con cuota (transcripcion evitada)"
+        return False, "worker NLLB no disponible (transcripcion evitada)"
 
     audio = extract_audio(video_path)
     if not audio:
