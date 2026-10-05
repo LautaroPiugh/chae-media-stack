@@ -1071,7 +1071,7 @@ def process_movies():
     return ok, missing, downloaded, failed
 
 
-def process_series():
+def process_series(series_filter=None):
     log("=== Verificando series ===")
     data = get_json(f"{BAZARR_URL}/api/series", {"limit": 2000})
     if data is None:
@@ -1085,6 +1085,8 @@ def process_series():
 
     for serie in series_list:
         title = serie.get('title', '?')
+        if series_filter and series_filter.casefold() not in title.casefold():
+            continue
         sid = serie.get('sonarrSeriesId')
         ep_count = serie.get('episodeFileCount', 0)
         imdb_id = serie.get('imdbId', '')
@@ -1301,13 +1303,18 @@ def translate_movie_by_title(title_input):
         return f"❌ Falló la traducción de {title} ({year})."
 
 
-def main():
+def main(series_filter=None):
     log("=== INICIO VERIFICACION SUBTITULOS ES ===")
     acquire_lock()
     load_omdb_cache()
     try:
-        m_ok, m_missing, m_downloaded, m_failed = process_movies()
-        s_ok, s_downloaded, s_failed = process_series()
+        if series_filter:
+            log(f"=== Verificacion dirigida: serie {series_filter} ===")
+            m_ok, m_missing, m_downloaded, m_failed = 0, 0, 0, 0
+            s_ok, s_downloaded, s_failed = process_series(series_filter)
+        else:
+            m_ok, m_missing, m_downloaded, m_failed = process_movies()
+            s_ok, s_downloaded, s_failed = process_series()
     except BazarrDown as e:
         msg = f"⚠️ Bazarr no responde ({e}); verificacion de subtitulos abortada"
         log(f"ERROR: {msg}")
@@ -1338,6 +1345,9 @@ if __name__ == "__main__":
         if len(sys.argv) > 2 and sys.argv[1] == '--translate-movie':
             result = translate_movie_by_title(' '.join(sys.argv[2:]))
             print(result)
+            sys.exit(0)
+        if len(sys.argv) > 2 and sys.argv[1] == '--series':
+            main(' '.join(sys.argv[2:]))
             sys.exit(0)
         main()
     except SystemExit:
