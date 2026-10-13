@@ -1,0 +1,9 @@
+[Unit]
+Description=Recupera torrents Sonarr sin seeds y detenidos
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /home/chae/stack/scripts/retry-stalled-sonarr-torrents.sh
+TimeoutStartSec=10min

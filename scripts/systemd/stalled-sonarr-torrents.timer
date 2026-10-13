@@ -1,0 +1,10 @@
+[Unit]
+Description=Revisa a diario torrents Sonarr detenidos sin seeds
+
+[Timer]
+OnCalendar=*-*-* 04:15:00
+Persistent=true
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target
