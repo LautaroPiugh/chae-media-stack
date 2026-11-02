@@ -378,7 +378,8 @@ jq -n \
   # 640 y no 600: el JSON incluye colas de Radarr/Sonarr con nombres de
   # PELICULAS/SERIES, asi que el contenido es privado y no va a 644.
   # Lo lee Apache como www-data via /api/stack-data.php, asi que necesita
-  # lectura por grupo. El directorio es setgid (chae:www-data 2775), por eso
-  # el archivo hereda ese grupo y no hace falta chgrp — que ademas fallaria
-  # sin root, porque chae no es miembro de www-data.
+  # lectura. El directorio es setgid, pero un archivo temporal preexistente
+  # puede conservar el grupo de chae al hacer mv; una ACL explicita evita que
+  # Apache vuelva a recibir HTTP 500 sin abrir el JSON a otros usuarios.
   chmod 640 "$OUTPUT_FILE"
+  setfacl -m u:www-data:r-- "$OUTPUT_FILE"

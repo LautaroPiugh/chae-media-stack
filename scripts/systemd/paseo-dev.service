@@ -1,0 +1,24 @@
+[Unit]
+Description=Paseo development daemon (unprivileged dev account)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dev
+Group=dev
+WorkingDirectory=/srv/dev
+Environment=HOME=/home/dev
+Environment=PASEO_HOME=/home/dev/.paseo
+Environment=PATH=/home/dev/.local/share/pnpm:/home/dev/.local/share/pnpm/bin:/home/dev/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env paseo daemon run --home /home/dev/.paseo
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/home/dev /srv/dev
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

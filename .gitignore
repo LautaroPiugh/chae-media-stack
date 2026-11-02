@@ -152,3 +152,5 @@ services/scrutiny/influxdb/
 
 # ML model weights (subgen/whisper) — 1.5G, descargables, no son source
 services/subgen/models/
+# Local Pi runtime state
+.atl/

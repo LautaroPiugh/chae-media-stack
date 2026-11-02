@@ -18,39 +18,30 @@ let pairingRequested = false;
 
 const logger = pino({ level: 'info' });
 
-function renderCompactQr(value) {
+function renderTerminalQr(value) {
   const matrix = qrcode.create(value, { errorCorrectionLevel: 'L' }).modules;
   const margin = 4;
   const width = matrix.size + margin * 2;
   const height = matrix.size + margin * 2;
-  const dots = [
-    [0, 0, 0x01], [0, 1, 0x02], [0, 2, 0x04], [1, 0, 0x08],
-    [1, 1, 0x10], [1, 2, 0x20], [0, 3, 0x40], [1, 3, 0x80],
-  ];
   const lines = [];
 
-  for (let y = 0; y < height; y += 4) {
-    let line = '';
-    for (let x = 0; x < width; x += 2) {
-      let pattern = 0;
-      for (const [dx, dy, bit] of dots) {
-        const moduleX = x + dx - margin;
-        const moduleY = y + dy - margin;
-        if (moduleX >= 0 && moduleY >= 0 && moduleX < matrix.size && moduleY < matrix.size
-          && matrix.get(moduleX, moduleY)) {
-          pattern |= bit;
-        }
-      }
-      line += String.fromCodePoint(0x2800 + pattern);
+  for (let y = 0; y < height; y += 1) {
+    let line = '\x1b[47m';
+    for (let x = 0; x < width; x += 1) {
+      const moduleX = x - margin;
+      const moduleY = y - margin;
+      const isDark = moduleX >= 0 && moduleY >= 0 && moduleX < matrix.size && moduleY < matrix.size
+        && matrix.get(moduleX, moduleY);
+      line += isDark ? '\x1b[40m  \x1b[47m' : '  ';
     }
-    lines.push(line);
+    lines.push(`${line}\x1b[0m`);
   }
 
   return lines.join('\n');
 }
 
 function publishQr(qr) {
-  console.log(`\n📱 Scan this compact WhatsApp QR:\n\n${renderCompactQr(qr)}\n`);
+  console.log(`\nWhatsApp QR:\n\n${renderTerminalQr(qr)}\n`);
   qrcode.toFile(qrPath, qr, { width: 192, margin: 1 })
     .then(() => console.log(`📱 WhatsApp QR ready: ${qrPath}`))
     .catch((error) => console.error(`[WhatsApp] Could not save QR: ${error.message}`));

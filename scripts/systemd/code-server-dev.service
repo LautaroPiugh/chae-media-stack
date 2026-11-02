@@ -1,0 +1,23 @@
+[Unit]
+Description=Code Server development IDE (unprivileged dev account)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dev
+Group=dev
+WorkingDirectory=/srv/dev/workspaces
+Environment=HOME=/home/dev
+Environment=PATH=/home/dev/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/dev/.local/bin/code-server /srv/dev/workspaces
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/home/dev /srv/dev
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
