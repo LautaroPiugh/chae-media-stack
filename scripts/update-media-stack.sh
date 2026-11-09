@@ -342,7 +342,8 @@ wait_for_compose_services() {
   local project_dir="$2"
   shift 2
   local -a services=("$@")
-  local override_file="$(dirname "$compose_file")/docker-compose.override.yml"
+  local override_file
+  override_file="$(dirname "$compose_file")/docker-compose.override.yml"
   local -a compose_args=(-f "$compose_file")
   local attempt
   local service
@@ -398,7 +399,8 @@ rollback_compose_services() {
   local target="$1"
   local compose_file="$ROLLBACK_COMPOSE_ROOT/services/$target/docker-compose.yml"
   local project_dir="$ROOT/services/$target"
-  local override_file="$(dirname "$compose_file")/docker-compose.override.yml"
+  local override_file
+  override_file="$(dirname "$compose_file")/docker-compose.override.yml"
   local -a compose_args=(-f "$compose_file")
   shift
   local -a services=("$@")
