@@ -87,14 +87,26 @@ _fail_closed_require() {
     require_system_dev
   )
 }
-_fail_closed_assert() {
+# Captura stderr para verificar en QUÉ chequeo aborta: rc=1 solo no alcanza
+# (un disco montado también da rc=1, y el test pasaría por el motivo equivocado).
+_fail_closed_assert_stderr() {
   (
     resolve_system_dev() { return 1; }
     assert_safe_to_wipe "$1"
-  )
+  ) 2>&1
 }
 expect "require_system_dev falla si no hay disco de sistema" 1 _fail_closed_require
-expect "assert_safe_to_wipe falla cerrado sin disco de sistema" 1 _fail_closed_assert /dev/null
+
+if [[ -n "${branch_dev:-}" && -b "${branch_dev:-}" ]]; then
+  fc_out="$(_fail_closed_assert_stderr "$branch_dev" || true)"
+  if [[ "$fc_out" == *"no puedo identificar el disco del sistema"* ]]; then
+    ok "assert_safe_to_wipe aborta en el chequeo del disco de sistema"
+  else
+    bad "assert_safe_to_wipe no abortó donde debía (salida: ${fc_out:0:90})"
+  fi
+else
+  skipped "assert_safe_to_wipe aborta en el chequeo del disco de sistema (sin rama montada)"
+fi
 
 printf '\n%d ok, %d fail, %d skip\n' "$pass" "$fail" "$skip"
 [[ $fail -eq 0 ]]
