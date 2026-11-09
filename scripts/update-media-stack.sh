@@ -342,6 +342,8 @@ wait_for_compose_services() {
   local project_dir="$2"
   shift 2
   local -a services=("$@")
+  local override_file="$(dirname "$compose_file")/docker-compose.override.yml"
+  local -a compose_args=(-f "$compose_file")
   local attempt
   local service
   local container_id
@@ -349,10 +351,11 @@ wait_for_compose_services() {
   local health
   local ready
 
+  [[ -f "$override_file" ]] && compose_args+=(-f "$override_file")
   for attempt in $(seq 1 45); do
     ready=1
     for service in "${services[@]}"; do
-      container_id="$(docker compose --project-directory "$project_dir" -f "$compose_file" ps -q "$service")"
+      container_id="$(docker compose --project-directory "$project_dir" "${compose_args[@]}" ps -q "$service")"
       if [[ -z "$container_id" ]]; then
         ready=0
         break
@@ -395,15 +398,18 @@ rollback_compose_services() {
   local target="$1"
   local compose_file="$ROLLBACK_COMPOSE_ROOT/services/$target/docker-compose.yml"
   local project_dir="$ROOT/services/$target"
+  local override_file="$(dirname "$compose_file")/docker-compose.override.yml"
+  local -a compose_args=(-f "$compose_file")
   shift
   local -a services=("$@")
   local service
 
+  [[ -f "$override_file" ]] && compose_args+=(-f "$override_file")
   log 'Iniciando rollback del objetivo'
   for service in "${services[@]}"; do
     docker image tag "${OLD_IMAGE_IDS[$service]}" "${OLD_IMAGE_REFS[$service]}"
   done
-  docker compose --project-directory "$project_dir" -f "$compose_file" up -d --no-deps --force-recreate "${services[@]}"
+  docker compose --project-directory "$project_dir" "${compose_args[@]}" up -d --no-deps --force-recreate "${services[@]}"
   wait_for_compose_services "$compose_file" "$project_dir" "${services[@]}" \
     && wait_for_target_endpoint "$target"
 }
@@ -428,6 +434,8 @@ update_allowed_service() {
   local target="$1"
   local dir
   local compose_file
+  local override_file
+  local -a compose_args=()
   local service
   local container_id
   local -a services=()
@@ -446,14 +454,17 @@ update_allowed_service() {
   read -r -a services <<< "${UPDATE_SERVICES[$target]}"
 
   [[ -f "$compose_file" ]] || die "no existe el Compose de $target: $compose_file"
-  docker compose --project-directory "$project_dir" -f "$compose_file" config --quiet
+  override_file="$dir/docker-compose.override.yml"
+  compose_args=(-f "$compose_file")
+  [[ -f "$override_file" ]] && compose_args+=(-f "$override_file")
+  docker compose --project-directory "$project_dir" "${compose_args[@]}" config --quiet
   check_media_mounts
   assert_watchtower_stopped
   check_recent_service_backup "$target"
   run_global_health_check
 
   for service in "${services[@]}"; do
-    container_id="$(docker compose --project-directory "$project_dir" -f "$compose_file" ps -q "$service")"
+    container_id="$(docker compose --project-directory "$project_dir" "${compose_args[@]}" ps -q "$service")"
     [[ -n "$container_id" ]] || die "Compose no administra un contenedor running para $service"
     assert_container_safe_for_update "$container_id" "$service"
     OLD_IMAGE_IDS["$service"]="$(docker inspect --format '{{.Image}}' "$container_id")"
@@ -464,14 +475,14 @@ update_allowed_service() {
 
   require_confirmation "$target"
   if [[ "$DRY_RUN" == '1' ]]; then
-    run_cmd docker compose --project-directory "$project_dir" -f "$compose_file" pull "${services[@]}"
-    run_cmd docker compose --project-directory "$project_dir" -f "$compose_file" up -d --no-deps "${services[@]}"
+    run_cmd docker compose --project-directory "$project_dir" "${compose_args[@]}" pull "${services[@]}"
+    run_cmd docker compose --project-directory "$project_dir" "${compose_args[@]}" up -d --no-deps "${services[@]}"
     status='dry-run'
     return 0
   fi
 
-  run_cmd docker compose --project-directory "$project_dir" -f "$compose_file" pull "${services[@]}"
-  if ! run_cmd docker compose --project-directory "$project_dir" -f "$compose_file" up -d --no-deps "${services[@]}"; then
+  run_cmd docker compose --project-directory "$project_dir" "${compose_args[@]}" pull "${services[@]}"
+  if ! run_cmd docker compose --project-directory "$project_dir" "${compose_args[@]}" up -d --no-deps "${services[@]}"; then
     rollback_compose_services "$target" "${services[@]}" \
       || die "fallo la actualizacion y tambien el rollback de $target"
     die "fallo la actualizacion; $target fue restaurado"
