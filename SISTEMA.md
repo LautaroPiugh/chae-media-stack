@@ -10,9 +10,10 @@ Servidor multimedia argentino con 15+ servicios Docker, bot de WhatsApp, túnel 
 
 | Componente | Detalle |
 |-----------|---------|
-| CPU | x86_64 |
-| RAM | 32GB (25,6G disponibles en uso normal) |
-| Disco sistema | SSD 220G (LVM ext4, 20% usado) — by-id estable `ata-HS-SSD-WAVE_S__240G_FZ8257638` (resuelve a `/dev/sdg` en la configuración actual) |
+| CPU | AMD Ryzen 7 5700G (8C/16T, iGPU Radeon Vega) — 16 hilos, microcódigo 0x0a500014 |
+| Placa madre | MSI A520M-A PRO (MS-7C96), BIOS 1.L1 (2025-09-18), Secure Boot activo |
+| RAM | 32 GB instalados (28,1 GB visibles: reserva BIOS/iGPU); swap 4 GB |
+| Disco sistema | SSD 240G (LVM ext4, ~45% usado) — se identifica por la tabla de montajes y por by-id `ata-HS-SSD-WAVE\x28S\x29_240G_FZ8257638`; hoy `/dev/sdf`. **Las letras cambian con la placa y el puerto: usar el guard, nunca `/dev/sdX`** |
 | Disco datos 1 | HDD 1TB USB → `/mnt/media1` (ext4) — espejo de backups (`backups/stack/`) + rescate de sdf (`chae-archive/sdf-2026`, 5.5G de contabilidad) |
 | Disco datos 2 | HDD 1TB USB → `/mnt/media2` (ext4) — descargas (`downloads/`) y backups principales |
 | Disco datos 3 | HDD 1TB WD → `/mnt/media3` (ext4) — biblioteca activa (series/películas) |
@@ -26,6 +27,43 @@ Servidor multimedia argentino con 15+ servicios Docker, bot de WhatsApp, túnel 
 > 1TB ext4. Los UUIDs de las ramas viven en `/home/chae/stack/.media-branches.conf`, que leen
 > `media-mount-recovery.sh`, `media-status.sh`, `chaetop` y `media-pool-watchdog.sh`.
 > Para agregar/quitar discos: `scripts/add-media-disk.sh` (ver abajo).
+
+> **Nota nov 2026 — cambio de CPU y motherboard:** se pasó a Ryzen 7 5700G sobre
+> MSI A520M-A PRO. Eso movió el controlador SATA de `pci-0000:00:17.0` a
+> `pci-0000:16:00.1`: el disco del sistema pasó de `/dev/sdg` a `/dev/sdf` y todas
+> las rutas `by-path` viejas dejaron de existir. La NIC pasó a `enp34s0` (r8169) y
+> el netplan se reescribió el 2026-11-09.
+>
+> `scripts/lib/media-disk-guard.sh` ya **deriva** el disco del sistema desde la
+> tabla de montajes (no hardcodea by-path) y **falla cerrado** si no lo puede
+> identificar; tiene tests en `scripts/test/media-disk-guard.test.sh`.
+> Los scripts de la movida de sep 2026 (`fix-media-mounts.sh`,
+> `add-media6-disk.sh`, `rescue-and-format-sdf.sh`) siguen con las rutas by-path
+> del hardware viejo: no resuelven y abortan — hay que re-parametrizarlos antes de
+> usarlos, no son genéricos.
+
+> **Aceleración por hardware (nov 2026):** Jellyfin transcodifica con **VAAPI** sobre la iGPU
+> (Radeon Vega, `/dev/dri/renderD128`): 1080p h264→h264 a **10,6x** tiempo real contra 8,3x en
+> CPU, y con la CPU casi libre para el resto del stack. Tdarr expone `h264_vaapi`/`hevc_vaapi`
+> y corre con `transcodegpuWorkers=1`. No hay contenido 4K/HDR en la biblioteca, así que el
+> tonemapping queda desactivado.
+>
+> El passthrough de `/dev/dri` vive en el `docker-compose.override.yml` de cada servicio
+> (jellyfin, tdarr, postgres), que **no se versiona** (`.gitignore`). `update-media-stack.sh`
+> invocaba `docker compose -f <base>` y por eso descartaba el override: cada actualización de
+> imagen recreaba los containers sin GPU. Corregido: todas las invocaciones cargan el override
+> cuando existe, igual que `start-stack.sh`.
+>
+> **Monitoreo SMART y sensores (nov 2026):** `smartd` quedó deshabilitado porque se cuelga
+> escaneando los puentes USB. Scrutiny vuelve a recolectar: el collector no se autodispara en el
+> contenedor omnibus, así que lo corre cron cada 15 min
+> (`docker exec chae-scrutiny scrutiny-collector-metrics run`).
+>
+> La mother trae un **NCT6687D**; Secure Boot en modo `integrity` impide que `sensors-detect`
+> pruebe `/dev/port`, así que el módulo se carga a mano con `nct6683` (persistido en
+> `/etc/modules-load.d/nct6683.conf`). Con eso `sensors` muestra fan1 (~785 RPM), pwm1/pwm8 y
+> los termistores del gabinete además de `k10temp` y `amdgpu`. `intrusion0: ALARM` es el switch
+> de intrusión del gabinete, que quedó latcheado al abrir el equipo para cambiar CPU/placa.
 
 ### Pool mergerfs (`/mnt/media`)
 
@@ -77,6 +115,35 @@ y recién después se formateó como `media5`.
 ### Limpieza manual (botón del panel)
 
 El panel Homepage (192.168.0.200:3003) tiene la tarjeta **"Limpieza del Stack"** (grupo Mantenimiento). El clic dispara la limpieza vía `chae-cleanup-api.service` (systemd, puerto 3655, script `/home/chae/stack/scripts/cleanup-stack.sh`): purga cachés de transcode/logs de Jellyfin, caché de Tdarr (`/mnt/media2/downloads/tdarr-cache`) y prune de imágenes Docker colgantes; reporta espacio liberado y avisa por WhatsApp.
+
+### Snapshots de opencode (consumo de disco)
+
+opencode guarda un repo git paralelo por proyecto para poder deshacer los cambios del agente, en
+`~/.local/share/opencode/snapshot/`. El proyecto **`global`** tiene `worktree = /home/chae`: snapshotea
+el home entero, y su lista de exclusiones es el `.gitignore` de `/home/chae` (el repo vacío que creó
+Engram para identificar el proyecto `chae`, con `engram-project-identity.json`).
+
+El 9 nov 2026 ese repo llegó a **90 GB y 4,3 M de objetos** y dejó el disco raíz al 96%. Causa: el
+`.gitignore` del home solo excluía `.atl/`, así que entraban `~/.cache`, `node_modules` y el propio
+`~/.local/share/opencode` (con su base de 800 MB y sus packs de objetos), de modo que cada pasada
+copiaba el resultado de la anterior. Peor: el repo no tenía ni un commit ni un ref, o sea que todo era
+basura huérfana y ningún undo lo usaba.
+
+Fix aplicado: `/home/chae/.gitignore` excluye `.cache/`, `.local/share/`, `.local/state/`, `.npm/`,
+`.bun/`, `.pnpm-store/`, `node_modules/`, `.paseo/`, `.paseo-*/`, `.pi/`, `.opencode/`, `.codex/`,
+`.warp/`, `.engram/`, `.ssh/`, `.docker/` y `.config/opencode/node_modules/`. Con eso lo elegible pasó
+de 90 GB a **82 MB** (283 archivos). `.ssh/` y `.docker/` se excluyen además por seguridad: las claves
+privadas y los token seeds se estaban copiando al store de snapshots.
+
+**Regla operativa:** no abrir opencode con `cwd = $HOME`. Abierto desde un repo (`~/stack`, etc.) usa
+el snapshot de ese repo y no el global. Para chequear:
+
+```
+du -sh ~/.local/share/opencode/snapshot
+git --git-dir=$(ls -d ~/.local/share/opencode/snapshot/global/*/) count-objects -vH
+```
+
+Si vuelve a crecer, o se perdieron los patrones del `.gitignore` del home o se agregó algo pesado ahí.
 
 ---
 
@@ -293,6 +360,7 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 | 2 minutos | `media-pool-watchdog.timer` | Remonta ramas caídas y el pool (systemd, root) |
 | 5 minutos | `/home/chae/stack/scripts/generate-stack-dashboard-data.sh` | Genera cache JSON para dashboard |
 | 10 minutos | `python3 /home/chae/stack/services/bazarr/auto_translate.py` | Traduce subs EN bjados por Bazarr vía Gemini |
+| 15 minutos | `docker exec chae-scrutiny scrutiny-collector-metrics run` | Recolecta SMART a Scrutiny/InfluxDB (el contenedor omnibus no se autodispara) |
 | 6 horas | `python3 /home/chae/stack/scripts/check_es_subs.py` | Verifica y descarga subtítulos ES faltantes |
 | 3am daily | `/home/chae/stack/scripts/backup-stack.sh` | Backup PostgreSQL + configs a `/mnt/media2/backups/stack/` (retención 14 días) |
 | Manual por WhatsApp | `media-update-broker` | Actualiza la allowlist Docker uno por uno y se detiene ante fallos |
