@@ -15,8 +15,44 @@
 # confiable: los dos gabinetes USB reportan el MISMO serial, así que by-id
 # colisiona entre ellos. by-id solo sirve para el disco del sistema, que es
 # ATA y tiene serial único.
-SYS_BY_ID='ata-HS-SSD-WAVE_S__240G_FZ8257638'
-SYS_BY_PATH='pci-0000:00:17.0-ata-4'
+# NO hardcodearlos: cambian con la motherboard, con el puerto SATA y con el
+# escapado de udev. La A520M-A PRO movió el controlador de 00:17.0 a 16:00.1 y
+# el by-id real escribe los paréntesis del modelo como \x28...\x29.
+
+# sys_real_dev — dispositivo de bloque que contiene /, subiendo por los padres.
+# -s recorre hacia los padres y -r evita los caracteres de árbol; el último de
+# la lista es siempre el disco entero (PKNAME no sirve para dm/LVM: vuelve vacío).
+sys_real_dev() {
+  local node
+  node="$(findmnt -n -o SOURCE / 2>/dev/null | head -n1)" || return 1
+  [[ -n "$node" ]] || return 1
+  node="$(lsblk -rsno NAME "$node" 2>/dev/null | tail -n1)"
+  [[ -n "$node" ]] || return 1
+  node="/dev/$node"
+  [[ -b "$node" ]] || return 1
+  printf '%s' "$node"
+}
+
+# sys_link <dir> — nombre del symlink estable de <dir> que apunta al disco de /.
+# Prefiere ata-*/usb-* sobre wwn-*/dm-uuid-* para que el id sea legible.
+sys_link() {
+  local dir="$1" dev link first=''
+  dev="$(sys_real_dev)" || return 1
+  for link in "$dir"/*; do
+    [[ -e "$link" ]] || continue
+    case "${link##*/}" in *-part[0-9]*) continue ;; esac
+    [[ "$(readlink -f "$link" 2>/dev/null)" == "$dev" ]] || continue
+    case "${link##*/}" in
+      ata-* | usb-*) printf '%s' "${link##*/}"; return 0 ;;
+    esac
+    [[ -z "$first" ]] && first="${link##*/}"
+  done
+  [[ -n "$first" ]] && { printf '%s' "$first"; return 0; }
+  return 1
+}
+
+SYS_BY_ID="$(sys_link /dev/disk/by-id || true)"
+SYS_BY_PATH="$(sys_link /dev/disk/by-path || true)"
 
 # Tamaño del disco del sistema. Es un backstop: si alguien reacomoda los IDs,
 # que el tamaño no cierre igual.
@@ -45,13 +81,31 @@ real_dev() {
 # y/o by-path. Falla si no resuelve.
 resolve_system_dev() {
   local p
-  for p in "/dev/disk/by-id/$SYS_BY_ID" "/dev/disk/by-path/$SYS_BY_PATH"; do
+  p="$(sys_real_dev 2>/dev/null)"
+  if [[ -n "$p" && -b "$p" ]]; then
+    printf '%s' "$p"
+    return 0
+  fi
+  for p in ${SYS_BY_ID:+"/dev/disk/by-id/$SYS_BY_ID"} ${SYS_BY_PATH:+"/dev/disk/by-path/$SYS_BY_PATH"}; do
     if [[ -e "$p" ]]; then
       readlink -f "$p"
       return 0
     fi
   done
   return 1
+}
+
+# require_system_dev — como resolve_system_dev, pero falla ruidosamente.
+# Lo usan los chequeos destructivos: si no sabemos cuál es el disco del sistema,
+# no hay verificación que lo proteja, así que se aborta.
+require_system_dev() {
+  local dev
+  dev="$(resolve_system_dev)" && [[ -n "$dev" ]] || {
+    printf 'PELIGRO: no puedo identificar el disco del sistema (by-id %s, by-path %s) — aborto\n' \
+      "${SYS_BY_ID:-?}" "${SYS_BY_PATH:-?}" >&2
+    return 1
+  }
+  printf '%s' "$dev"
 }
 
 # disk_meta <id> — línea descriptiva de un disco por id estable.
@@ -88,12 +142,13 @@ assert_safe_to_wipe() {
   [[ -n "$real" ]] || { printf 'PELIGRO: no se resuelve %s\n' "$dev" >&2; return 1; }
   [[ -b "$real" ]] || { printf 'PELIGRO: %s no es un dispositivo de bloque\n' "$real" >&2; return 1; }
 
-  # 2. que no sea el disco del sistema
-  if sys_dev="$(resolve_system_dev)"; then
-    if [[ "$real" == "$sys_dev" ]]; then
-      printf 'PELIGRO: %s ES el disco del sistema (%s)\n' "$real" "$sys_dev" >&2
-      return 1
-    fi
+  # 2. que no sea el disco del sistema. Si no se puede resolver, ABORTAR: un
+  #    chequeo que no puede correr no protege nada, y fallar abierto acá es
+  #    exactamente cómo se formatea el disco que tiene /.
+  sys_dev="$(require_system_dev)" || return 1
+  if [[ "$real" == "$sys_dev" ]]; then
+    printf 'PELIGRO: %s ES el disco del sistema (%s)\n' "$real" "$sys_dev" >&2
+    return 1
   fi
 
   # 3. que no tenga ninguna partición montada — ABORTAR, nunca desmontar
@@ -127,8 +182,15 @@ assert_safe_to_wipe() {
     fi
   done
 
-  # 6. backstop por tamaño
+  # 6. backstop por tamaño: si mide lo mismo que el disco del sistema, no va.
   size="$(lsblk -dn -o SIZE "$real" 2>/dev/null | xargs || echo '?')"
+  local sys_size
+  sys_size="$(lsblk -dn -o SIZE "$sys_dev" 2>/dev/null | xargs || echo '')"
+  if [[ -n "$sys_size" && "$size" == "$sys_size" ]]; then
+    printf 'PELIGRO: %s mide %s, igual que el disco del sistema (%s) — aborto\n' \
+      "$real" "$size" "$sys_dev" >&2
+    return 1
+  fi
   for v in "${SYS_SIZE_VARIANTS[@]}"; do
     if [[ "$size" == "$v" ]]; then
       printf 'PELIGRO: %s mide %s (tamaño del disco del sistema) — aborto\n' "$real" "$size" >&2
