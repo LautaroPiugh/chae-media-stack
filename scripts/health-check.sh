@@ -22,8 +22,8 @@ SERVICES=(
   "Jellyseerr:chae-jellyseerr:http:5055"
   "Flaresolverr:chae-flaresolverr:http:8191"
   "SubgenAI:subgenai:http:9000"
-  "Tdarr:chae-tdarr:http:8265"
-  "Tdarr Node:chae-tdarr-node:docker-tcp:chae-tdarr,8266"
+  # "Tdarr:chae-tdarr:http:8265"  # parkeado (nov 2026)
+  # "Tdarr Node:chae-tdarr-node:docker-tcp:chae-tdarr,8266"
   "Uptime Kuma:chae-uptime-kuma:http:3001"
   "Homepage:chae-homepage:http:3003"
   "WhatsApp Bot:jellyfin-whatsapp-bot:http:3555:/health"

@@ -44,9 +44,10 @@ Servidor multimedia argentino con 15+ servicios Docker, bot de WhatsApp, túnel 
 
 > **Aceleración por hardware (nov 2026):** Jellyfin transcodifica con **VAAPI** sobre la iGPU
 > (Radeon Vega, `/dev/dri/renderD128`): 1080p h264→h264 a **10,6x** tiempo real contra 8,3x en
-> CPU, y con la CPU casi libre para el resto del stack. Tdarr expone `h264_vaapi`/`hevc_vaapi`
-> y corre con `transcodegpuWorkers=1`. No hay contenido 4K/HDR en la biblioteca, así que el
-> tonemapping queda desactivado.
+> CPU, y con la CPU casi libre para el resto del stack. Tdarr (hoy retirado) también detectaba
+> `h264_vaapi`/`hevc_vaapi`; el contenedor `chae-transcoder` provee ese mismo ffmpeg para el
+> script de re-encodeo. No hay contenido 4K/HDR en la biblioteca, así que el tonemapping queda
+> desactivado.
 >
 > El passthrough de `/dev/dri` vive en el `docker-compose.override.yml` de cada servicio
 > (jellyfin, tdarr, postgres), que **no se versiona** (`.gitignore`). `update-media-stack.sh`
@@ -171,7 +172,12 @@ Si vuelve a crecer, o se perdieron los patrones del `.gitignore` del home o se a
 
 ---
 
-## Servicios Docker (22 containers)
+## Servicios Docker (20 containers + transcoder)
+
+> **Tdarr fue retirado (nov 2026).** Se eliminaron los contenedores y las imágenes
+> (`chae-tdarr`, `chae-tdarr-node`): no cerraba los jobs con mergerfs y el re-encodeo pasó a
+> `scripts/transcode-vaapi.sh`. Quedó parkeado en `start-stack.sh`, `health-check.sh` y
+> `run-media-stack-update.sh`. Las referencias a Tdarr más abajo son históricas.
 
 Todos corren con `TZ=America/Argentina/Buenos_Aires`. De los 22 contenedores, 9 admiten `PUID`/`PGID` y las tienen configuradas: son los únicos que crean archivos como `1000:1000` (`chae`). Los demás no reciben esas variables. AdGuard y Scrutiny corren como root, y Scrutiny además es `privileged`. En los que sí las soportan, esto tampoco implica non-root: el PID 1 sigue siendo root y las imágenes de linuxserver bajan solo el proceso del servicio a uid 1000.
 
@@ -199,7 +205,6 @@ Todos corren con `TZ=America/Argentina/Buenos_Aires`. De los 22 contenedores, 9 
 | Servicio | Puerto | URL | Imagen |
 |----------|--------|-----|--------|
 | **WhatsApp Bot** | 3555 | `http://localhost:3555` | `jellyfin-whatsapp-bot:latest` |
-| **Tdarr** | 8265 | `http://192.168.0.200:8265` | `ghcr.io/haveagitgat/tdarr` |
 | **Maintainerr** | 8787 | `http://192.168.0.200:8787` (mapped desde 6246) | `ghcr.io/maintainerr/maintainerr` |
 | **Portainer** | 9443 (SSL) | `https://127.0.0.1:9443` (solo loopback, no accesible desde la LAN) | `portainer/portainer-ce` |
 | **SubgenAI** | 9000 | `http://192.168.0.200:9000` | `mccloud/subgen` |

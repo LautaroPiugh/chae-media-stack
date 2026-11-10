@@ -18,7 +18,7 @@ BACKUP_DIR="${BACKUP_DIR:-/mnt/media2/backups/stack}"
 BACKUP_MAX_AGE_HOURS="${BACKUP_MAX_AGE_HOURS:-30}"
 WHATSAPP_NOTIFY_URL="${WHATSAPP_NOTIFY_URL:-http://127.0.0.1:3555/notify/system-update}"
 WHATSAPP_NOTIFY_TOKEN="${WHATSAPP_UPDATE_NOTIFY_TOKEN:-${WHATSAPP_NOTIFY_TOKEN:-}}"
-SERVICES=(flaresolverr prowlarr sonarr radarr bazarr jellyseerr jellyfin subgen tdarr)
+SERVICES=(flaresolverr prowlarr sonarr radarr bazarr jellyseerr jellyfin subgen)
 declare -Ar BACKUP_KEYS=(
   [flaresolverr]=''
   [prowlarr]='prowlarr'
@@ -28,7 +28,7 @@ declare -Ar BACKUP_KEYS=(
   [jellyseerr]='jellyseerr'
   [jellyfin]='jellyfin'
   [subgen]=''
-  [tdarr]='tdarr'
+  # [tdarr]='tdarr'  # parkeado (nov 2026)
 )
 
 started_at=''

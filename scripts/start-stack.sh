@@ -27,7 +27,7 @@ SERVICES=(
   subgen
   uptime-kuma
   homepage
-  tdarr
+  # tdarr  # parkeado: contenedores e imágenes eliminados (nov 2026)
   adguard
   recyclarr
   qbitmanage
