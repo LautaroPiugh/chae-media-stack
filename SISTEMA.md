@@ -112,6 +112,26 @@ SIPAF, `Contraseñas-Chrome.csv`, `Copia Datos Disco Viejo`, `Backup 01 diciembr
 completo a `/mnt/media/chae-archive/sdf-2026/` (5.5G, verificado 817/817 docs, 10432/10432 escritorio)
 y recién después se formateó como `media5`.
 
+### Re-encodeo con VAAPI (`scripts/transcode-vaapi.sh`)
+
+Re-encodea una carpeta a HEVC usando la iGPU, sin depender de Tdarr. Dry-run por defecto:
+
+```bash
+scripts/transcode-vaapi.sh /mnt/media/tdarr-test                    # lista qué haría
+scripts/transcode-vaapi.sh --apply --maxdepth 8 --min-bitrate 5000 /mnt/media/movies
+```
+
+Escribe el resultado en un temporal **en la misma carpeta** (mismo filesystem, rename atómico) y sólo
+reemplaza el original si: ffmpeg salió 0, la salida es HEVC y el tamaño quedó entre 40% y 110%.
+Si algo falla borra el temporal y deja el original intacto. Preserva el dueño original y loguea en
+`logs/transcode-vaapi.log`.
+
+Corre el ffmpeg del contenedor `chae-tdarr-node` (`TRANSCODE_CONTAINER`), que tiene `/media` rw,
+`/dev/dri` y VAAPI. Depende de ese contenedor exista.
+
+Medición sobre 60 s de 1080p H.264: **q32 = 53% del tamaño**, PSNR 42,3 dB, **10,6x** tiempo real.
+Para biblioteca real conviene `--min-bitrate 5000` (saltea los encodes ya flojos) y correrlo de noche.
+
 ### Limpieza manual (botón del panel)
 
 El panel Homepage (192.168.0.200:3003) tiene la tarjeta **"Limpieza del Stack"** (grupo Mantenimiento). El clic dispara la limpieza vía `chae-cleanup-api.service` (systemd, puerto 3655, script `/home/chae/stack/scripts/cleanup-stack.sh`): purga cachés de transcode/logs de Jellyfin, caché de Tdarr (`/mnt/media2/downloads/tdarr-cache`) y prune de imágenes Docker colgantes; reporta espacio liberado y avisa por WhatsApp.
