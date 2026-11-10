@@ -117,20 +117,24 @@ y recién después se formateó como `media5`.
 Re-encodea una carpeta a HEVC usando la iGPU, sin depender de Tdarr. Dry-run por defecto:
 
 ```bash
-scripts/transcode-vaapi.sh /mnt/media/tdarr-test                    # lista qué haría
+scripts/transcode-vaapi.sh "/mnt/media/series/Girls/Season 4"                  # lista qué haría
+scripts/transcode-vaapi.sh --apply --output-dir /mnt/media/tdarr-test/probar \
+  "/mnt/media/series/Girls/Season 4"                                           # escribe aparte, no toca el original
 scripts/transcode-vaapi.sh --apply --maxdepth 8 --min-bitrate 5000 /mnt/media/movies
 ```
 
-Escribe el resultado en un temporal **en la misma carpeta** (mismo filesystem, rename atómico) y sólo
-reemplaza el original si: ffmpeg salió 0, la salida es HEVC y el tamaño quedó entre 40% y 110%.
-Si algo falla borra el temporal y deja el original intacto. Preserva el dueño original y loguea en
-`logs/transcode-vaapi.log`.
+Escribe en un temporal **en la misma carpeta del destino** (rename atómico) y sólo reemplaza si:
+ffmpeg salió 0, la salida es HEVC, **la duración coincide con el original (±2 s)** y el tamaño quedó
+entre `--min-ratio` (15%) y `--max-ratio` (110%). Si algo falla borra el temporal y deja el original
+intacto. Preserva dueño y loguea en `logs/transcode-vaapi.log`.
 
-Corre el ffmpeg del contenedor `chae-tdarr-node` (`TRANSCODE_CONTAINER`), que tiene `/media` rw,
-`/dev/dri` y VAAPI. Depende de ese contenedor exista.
+Corre el ffmpeg del contenedor **`chae-transcoder`** (`services/transcoder/docker-compose.yml`): imagen
+de Jellyfin sin servicio, solo con `/media` rw, `/dev/dri` y ffmpeg con VAAPI. Ese contenedor tiene
+que estar arriba (`docker compose --project-directory services/transcoder up -d`).
 
-Medición sobre 60 s de 1080p H.264: **q32 = 53% del tamaño**, PSNR 42,3 dB, **10,6x** tiempo real.
-Para biblioteca real conviene `--min-bitrate 5000` (saltea los encodes ya flojos) y correrlo de noche.
+Medido sobre 1080p H.264 ya eficiente: q32 = 53% del tamaño, 10,6x tiempo real.
+Sobre Bluray 720p (Girls S04): q32 = **31%** (1,17 GB -> 352 MB), audio DTS 5.1 y subtítulos
+preservados, duración idéntica.
 
 ### Limpieza manual (botón del panel)
 

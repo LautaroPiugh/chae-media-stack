@@ -1,0 +1,17 @@
+# Contenedor mínimo para scripts/transcode-vaapi.sh.
+# No sirve contenido: solo provee ffmpeg con VAAPI y /media montado rw.
+# Se usa con `docker exec` desde el host.
+services:
+  transcoder:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: chae-transcoder
+    restart: unless-stopped
+    entrypoint: ["/bin/sleep", "infinity"]
+    environment:
+      - TZ=${TZ:-America/Argentina/Buenos_Aires}
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "991"
+    volumes:
+      - /mnt/media:/media
