@@ -6,6 +6,7 @@ const { router: sonarrWebhook } = require('./handlers/sonarrWebhook');
 const { processCommand } = require('./commands');
 const { startAlerts } = require('./alerts');
 const { isValidToken } = require('./utils/httpAuth');
+const { numberToJid } = require('./utils/jid');
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
@@ -44,6 +45,26 @@ app.get('/update-ready', (req, res) => {
 app.get('/test-whatsapp', requireBotAdminToken, async (req, res) => {
   const sent = await sendWhatsAppMessage('🧪 Test message from Jellyfin WhatsApp Bot');
   res.json({ ok: sent });
+});
+
+app.post('/admin/message', async (req, res) => {
+  const expectedToken = config.whatsapp.updateNotifyToken;
+  const providedToken = req.get('x-update-token') || '';
+
+  if (!isValidToken(expectedToken, providedToken)) {
+    res.status(401).json({ ok: false, error: 'unauthorized' });
+    return;
+  }
+
+  const to = String(req.body?.to || '').replace(/\D/g, '');
+  const message = String(req.body?.message || '').trim();
+  if (!to || !message) {
+    res.status(400).json({ ok: false, error: 'missing_to_or_message' });
+    return;
+  }
+
+  const sent = await sendWhatsAppMessage(message, numberToJid(to));
+  res.json({ ok: sent, to });
 });
 
 app.post('/notify/system-update', async (req, res) => {
