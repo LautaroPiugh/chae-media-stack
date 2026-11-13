@@ -393,6 +393,7 @@ Guarda IMDB IDs de episodios en JSON para no malgastar la cuota de 1000 llamadas
 | 6 horas | `python3 /home/chae/stack/scripts/check_es_subs.py` | Verifica y descarga subtítulos ES faltantes |
 | 3am daily | `/home/chae/stack/scripts/backup-stack.sh` | Backup PostgreSQL + configs a `/mnt/media2/backups/stack/` (retención 14 días) |
 | Manual por WhatsApp | `media-update-broker` | Actualiza la allowlist Docker uno por uno y se detiene ante fallos |
+| Manual | `update-media-stack.sh bump` | Mueve los pins `@sha256:` de los compose al `latest` real. Sin esto, `service` hace pull y no actualiza nada: el pin manda. Después: `service <nombre>` aplica la imagen con backup, health check y rollback. |
 | on-demand | `./scripts/start-stack.sh` | Inicia todos los servicios en orden |
 | on-demand | `./scripts/stop-stack.sh` | Detiene todos los servicios (orden inverso) |
 | on-demand | `./scripts/health-check.sh` | Verifica estado de todos los containers + HTTP + almacenamiento |

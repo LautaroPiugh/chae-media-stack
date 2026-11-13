@@ -27,6 +27,7 @@ WHATSAPP_NOTIFY_ENABLED="${WHATSAPP_NOTIFY_ENABLED:-1}"
 REFRESH_DASHBOARD_ENABLED="${REFRESH_DASHBOARD_ENABLED:-1}"
 MODE="${1:-help}"
 TARGET="${2:-}"
+BUMPED=0
 
 declare -Ar UPDATE_DIRS=(
   [prowlarr]="$COMPOSE_ROOT/services/prowlarr"
@@ -128,6 +129,12 @@ Uso seguro:
 
 Vista previa de toda la allowlist (nunca actualiza en lote):
   DRY_RUN=1 update-media-stack.sh media
+
+Mover los pins de digest al latest real (no reinicia nada):
+  DRY_RUN=1 update-media-stack.sh bump            # muestra viejo -> nuevo
+  DRY_RUN=0 update-media-stack.sh bump            # reescribe los compose
+  DRY_RUN=0 update-media-stack.sh bump sonarr     # solo uno
+  Despues: DRY_RUN=0 CONFIRM_UPDATE=sonarr update-media-stack.sh service sonarr
 
 Portainer requiere gates y backup adicionales:
   DRY_RUN=1 update-media-stack.sh portainer
@@ -432,6 +439,52 @@ restore_portainer() {
   return 1
 }
 
+bump_service() {
+  local target="$1"
+  local dir compose_file line ref repo tag current new
+
+  [[ -n "$target" ]] || die 'falta el servicio objetivo'
+  [[ -n "${UPDATE_DIRS[$target]-}" ]] || die "servicio fuera de allowlist: $target"
+  [[ -n "${UPDATE_SERVICES[$target]-}" ]] || { log "SKIP bump $target: parkeado"; return 0; }
+  dir="${UPDATE_DIRS[$target]}"
+  compose_file="$dir/docker-compose.yml"
+  [[ -f "$compose_file" ]] || die "no existe el Compose de $target: $compose_file"
+
+  line="$(grep -m1 -E '^[[:space:]]*image:' "$compose_file" || true)"
+  [[ -n "$line" ]] || die "sin 'image:' en $compose_file"
+
+  ref="${line#*image:}"
+  ref="$(printf '%s' "$ref" | xargs)"
+  current="$(printf '%s' "$ref" | sed -n 's/.*@\(sha256:[0-9a-f]*\).*/\1/p')"
+  ref="${ref%%@*}"
+  repo="$ref"
+  tag='latest'
+  if [[ "${ref##*/}" == *:* ]]; then
+    tag="${ref##*:}"
+    repo="${ref%:*}"
+  fi
+
+  if [[ "$DRY_RUN" == '1' ]]; then
+    log "DRY  bump $target: $repo:$tag (pin actual ${current:7:12})"
+    return 0
+  fi
+
+  docker pull -q "$repo:$tag" >/dev/null 2>&1 || die "pull fallo: $repo:$tag"
+  new="$(docker image inspect "$repo:$tag" --format '{{index .RepoDigests 0}}' 2>/dev/null | sed 's/.*@//')"
+  [[ "$new" == sha256:* ]] || die "no pude resolver el digest de $repo:$tag"
+
+  if [[ -n "$current" && "$new" == "$current" ]]; then
+    log "bump $target: sin cambios (${new:7:12})"
+    return 0
+  fi
+
+  sed -i "s|@${current}|@${new}|" "$compose_file"
+  docker compose --project-directory "$ROOT/services/$target" -f "$compose_file" config --quiet \
+    || die "compose invalido tras bump: $target"
+  log "bump $target: ${current:7:12} -> ${new:7:12}"
+  BUMPED=$((BUMPED + 1))
+}
+
 update_allowed_service() {
   local target="$1"
   local dir
@@ -652,6 +705,15 @@ main() {
     media|all)
       [[ "$MODE" != 'all' ]] || log 'System package updates are disabled; previewing media allowlist only'
       preview_allowlist
+      ;;
+    bump)
+      if [[ -n "$TARGET" ]]; then
+        bump_service "$TARGET"
+      else
+        mapfile -t _bump_targets < <(printf '%s\n' "${!UPDATE_DIRS[@]}" | sort)
+        for _t in "${_bump_targets[@]}"; do bump_service "$_t"; done
+      fi
+      status="bumped:${BUMPED}"
       ;;
     portainer)
       update_portainer
