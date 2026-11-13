@@ -33,6 +33,11 @@ for arg in "$@"; do
   esac
 done
 
+if [[ ${#ARGS[@]} -gt 2 ]]; then
+  echo "demasiados argumentos: se esperan número y, opcionalmente, nombre" >&2
+  exit 2
+fi
+
 NUMBER_RAW="${ARGS[0]:-}"
 NAME="${ARGS[1]:-}"
 if [[ -z "$NUMBER_RAW" ]]; then
@@ -81,13 +86,17 @@ import sys
 path, number = sys.argv[1], sys.argv[2]
 lines = open(path).read().splitlines()
 out = []
+found = False
 for line in lines:
     if line.startswith('WHATSAPP_USERS='):
+        found = True
         nums = [n for n in line.split('=', 1)[1].split(',') if n]
         if number not in nums:
             nums.append(number)
         line = 'WHATSAPP_USERS=' + ','.join(nums)
     out.append(line)
+if not found:
+    out.append('WHATSAPP_USERS=' + number)
 open(path, 'w').write('\n'.join(out) + '\n')
 PY
   echo "✔ $NUMBER agregado a WHATSAPP_USERS"
