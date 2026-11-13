@@ -49,7 +49,7 @@ declare -Ar UPDATE_SERVICES=(
   [flaresolverr]='flaresolverr'
   [subgen]='subgenai'
   [jellyseerr]='jellyseerr'
-  [tdarr]='tdarr tdarr-node'
+  # [tdarr]='tdarr tdarr-node'  # parkeado (nov 2026)
 )
 
 declare -Ar BACKUP_KEYS=(
