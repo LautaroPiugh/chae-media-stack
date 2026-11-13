@@ -286,6 +286,24 @@ Bot personal para administrar el media stack desde WhatsApp. Usa `@whiskeysocket
 | `/repetir` | Repite la página actual de resultados |
 | `/mas` | Siguiente página de resultados |
 
+### Alta de usuarios del bot (regla)
+
+Todo usuario nuevo se da de alta **siempre** con este comando, que además le manda la bienvenida:
+
+```bash
+scripts/add-bot-user.sh 5491123456789 "Nombre"
+scripts/add-bot-user.sh --resend 5491123456789 "Nombre"   # ya existe: sólo reenvía
+scripts/add-bot-user.sh --dry-run 5491123456789            # no toca nada
+```
+
+Hace el flujo completo: agrega el número a `WHATSAPP_USERS`, **recrea** el contenedor (un `restart` no
+recarga el `.env`), espera la conexión, envía la bienvenida por `POST /admin/message` y lo marca en
+`auth/greeted-users.json` para que no reciba la automática de primer mensaje. Si el envío falla, el
+usuario queda dado de alta igual y el script sale con error.
+
+`/admin/message` (`{to, message}`, protegido con `WHATSAPP_UPDATE_NOTIFY_TOKEN`) sirve para escribirle a
+cualquier número sin esperar a que escriba; antes todo saliente iba al owner.
+
 ### Admin Verification
 
 Para usar comandos admin, enviar `/registraradmin` una vez desde el número del dueño. El código de registro se configura localmente en el bot.
