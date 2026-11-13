@@ -470,7 +470,11 @@ bump_service() {
   fi
 
   docker pull -q "$repo:$tag" >/dev/null 2>&1 || die "pull fallo: $repo:$tag"
-  new="$(docker image inspect "$repo:$tag" --format '{{index .RepoDigests 0}}' 2>/dev/null | sed 's/.*@//')"
+  # RepoDigests puede traer entradas de otros repositorios (mirrors, retags):
+  # hay que quedarse con el digest del repo pedido, no con el primero.
+  new="$(docker image inspect "$repo:$tag" \
+           --format '{{range .RepoDigests}}{{println .}}{{end}}' 2>/dev/null \
+           | awk -F@ -v r="$repo" '$1==r {print $2; exit}')"
   [[ "$new" == sha256:* ]] || die "no pude resolver el digest de $repo:$tag"
 
   if [[ -n "$current" && "$new" == "$current" ]]; then
